@@ -1,0 +1,170 @@
+.orbSection { display: flex; flex-direction: column; align-items: center; gap: 16px; }
+.orbStatus { font-size: 15px; font-weight: 700; color: var(--text-primary); text-align: center; }
+.orbHint { font-size: 12.5px; color: var(--text-muted); text-align: center; max-width: 260px; line-height: 1.5; }
+
+.aiOrbWrapper {
+  position: relative;
+  width: 140px;
+  height: 140px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.orbRing {
+  position: absolute;
+  border-radius: 50%;
+  border: 2px solid rgba(99,102,241,.2);
+  animation: orb-pulse 2.5s infinite;
+}
+.orbRing:nth-child(1) { inset: 0; }
+.orbRing:nth-child(2) { inset: -12px; animation-delay: .6s; }
+.orbRing:nth-child(3) { inset: -24px; animation-delay: 1.2s; }
+
+@keyframes orb-pulse {
+  0%,100% { opacity: .7; transform: scale(1); }
+  50%      { opacity: .2; transform: scale(1.04); }
+}
+
+.aiOrb {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8px 32px rgba(67,56,202,.4), 0 2px 8px rgba(6,182,212,.3);
+  position: relative;
+  z-index: 1;
+  transition: box-shadow var(--t-base);
+}
+
+.aiOrb.speaking {
+  animation: orb-speak .4s ease-in-out infinite alternate;
+}
+
+@keyframes orb-speak {
+  from { transform: scale(1); box-shadow: 0 8px 32px rgba(67,56,202,.4); }
+  to   { transform: scale(1.06); box-shadow: 0 12px 40px rgba(67,56,202,.55); }
+}
+
+.vadSection { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+.vadBar {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 36px;
+}
+
+.vadBarItem {
+  width: 5px;
+  background: var(--border);
+  border-radius: 999px;
+  transition: height .08s ease, background .15s ease;
+  min-height: 4px;
+}
+
+.vadBarItem.active   { background: var(--primary-light); }
+.vadBarItem.speaking { background: var(--danger); }
+
+.vadLabel { font-size: 11.5px; color: var(--text-muted); font-weight: 500; letter-spacing: .04em; text-transform: uppercase; }
+
+.micControls { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+
+.micBtn {
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--primary-light));
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 6px 24px rgba(67,56,202,.38);
+  transition: transform var(--t-fast), box-shadow var(--t-fast), background var(--t-fast);
+  position: relative;
+  font-family: inherit;
+}
+
+.micBtn::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 2px solid rgba(99,102,241,.2);
+  animation: mic-ring 2s infinite;
+}
+
+@keyframes mic-ring {
+  0%   { transform: scale(.9); opacity: .7; }
+  100% { transform: scale(1.1); opacity: 0; }
+}
+
+.micBtn:hover { transform: scale(1.06); box-shadow: 0 8px 28px rgba(67,56,202,.5); }
+
+.micBtn.recording {
+  background: linear-gradient(135deg, #dc2626, #ef4444);
+  box-shadow: 0 6px 24px rgba(220,38,38,.45);
+  animation: mic-pulse-record .7s ease-in-out infinite alternate;
+}
+
+@keyframes mic-pulse-record {
+  from { box-shadow: 0 6px 24px rgba(220,38,38,.4); transform: scale(1); }
+  to   { box-shadow: 0 10px 36px rgba(220,38,38,.6); transform: scale(1.04); }
+}
+
+.micBtn.muted {
+  background: linear-gradient(135deg, #6b7280, #9ca3af);
+  box-shadow: 0 4px 14px rgba(107,114,128,.3);
+}
+
+.micLabel { font-size: 13px; color: var(--text-muted); font-weight: 500; text-align: center; }
+
+.callActions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  font-family: inherit;
+}
+.btnSecondary:hover:not(:disabled) {
+  background: var(--primary-pale);
+  color: var(--primary);
+  border-color: var(--primary-light);
+}
+.btnSecondary:disabled { opacity: .45; cursor: not-allowed; }
+
+.btnDanger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid #fca5a5;
+  background: #fef2f2;
+  color: var(--danger);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  font-family: inherit;
+}
+.btnDanger:hover:not(:disabled) {
+  background: var(--danger);
+  color: #fff;
+  border-color: var(--danger);
+}

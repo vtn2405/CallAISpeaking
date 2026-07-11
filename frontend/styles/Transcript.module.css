@@ -1,0 +1,127 @@
+.transcriptCol { display: flex; flex-direction: column; overflow: hidden; background: var(--surface); }
+
+.transcriptHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 24px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.transcriptTitle { font-size: 15px; font-weight: 700; }
+
+.iconBtn {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  font-family: inherit;
+}
+.iconBtn:hover { background: var(--primary-pale); color: var(--primary); border-color: var(--primary-light); }
+
+.transcriptScroll { flex: 1; overflow-y: auto; padding: 20px 24px; }
+.transcriptMessages { display: flex; flex-direction: column; gap: 16px; }
+
+.msgRow {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  animation: msg-in .25s ease both;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msgUser { flex-direction: row-reverse; }
+
+.msgAvatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.aiAvatar { background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; }
+.userMsgAvatar { background: linear-gradient(135deg, #f59e0b, #f97316); color: #fff; }
+
+.msgBubble {
+  max-width: 75%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.aiBubble { background: var(--surface-alt); border: 1px solid var(--border); border-bottom-left-radius: 6px; color: var(--text-primary); }
+.userBubble { background: linear-gradient(135deg, var(--primary), var(--primary-light)); color: #fff; border-bottom-right-radius: 6px; }
+
+.msgTime { display: block; font-size: 10px; margin-top: 6px; opacity: .6; }
+
+/* Typing indicator */
+.typingIndicator { display: flex; align-items: flex-end; gap: 10px; padding: 0 24px 12px; }
+
+.typingBubble {
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  border-bottom-left-radius: 6px;
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.typingDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  animation: typing-bounce .8s infinite;
+}
+.typingDot:nth-child(2) { animation-delay: .16s; }
+.typingDot:nth-child(3) { animation-delay: .32s; }
+
+@keyframes typing-bounce {
+  0%,80%,100% { transform: translateY(0); }
+  40%          { transform: translateY(-6px); }
+}
+
+/* Suggested prompts */
+.suggestedPrompts {
+  padding: 12px 24px 16px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.promptsLabel { font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; }
+.promptChips { display: flex; flex-wrap: wrap; gap: 7px; }
+
+.promptChip {
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: var(--primary-pale);
+  color: var(--primary);
+  border: 1.5px solid rgba(99,102,241,.2);
+  cursor: pointer;
+  transition: background var(--t-fast), transform var(--t-fast), color var(--t-fast);
+  font-family: inherit;
+}
+
+.promptChip:hover { background: var(--primary); color: #fff; transform: translateY(-1px); }

@@ -1,0 +1,84 @@
+.callHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.backBtn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  text-decoration: none;
+  font-family: inherit;
+}
+.backBtn:hover { background: var(--primary-pale); color: var(--primary); border-color: var(--primary-light); }
+
+.callHeaderCenter { display: flex; align-items: center; gap: 14px; }
+
+.callHeaderBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .1em;
+  color: var(--success);
+  background: var(--success-light);
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+
+.liveDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+  animation: live-blink 1.2s infinite;
+}
+
+@keyframes live-blink {
+  0%,100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+
+.callTimer {
+  font-size: 18px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .04em;
+  color: var(--text-primary);
+}
+
+.callHeaderRight { display: flex; align-items: center; gap: 8px; }
+
+.iconBtn {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  border: 1.5px solid var(--border);
+  background: var(--surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast), border-color var(--t-fast);
+  font-family: inherit;
+}
+.iconBtn:hover { background: var(--primary-pale); color: var(--primary); border-color: var(--primary-light); }
+.iconBtnDanger:hover { background: #fef2f2; color: var(--danger); border-color: #fca5a5; }
+.iconBtnActive { background: var(--primary-pale); color: var(--primary); border-color: var(--primary-light); }

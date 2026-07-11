@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Speaking Coach – Dashboard</title>
+  <meta name="description" content="Luyện speaking IELTS bằng AI thông qua video YouTube. Trò chuyện bằng giọng nói, nhận phản hồi thông minh." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <img src="../logo.png" alt="AI Speaking Coach Logo" class="logo-img" />
+      <div class="logo-text">
+        <span class="logo-title">AI SPEAKING</span>
+        <span class="logo-subtitle">COACH</span>
+      </div>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item active" id="nav-dashboard">
+        <span class="nav-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity=".9"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/></svg>
+        </span>
+        <span>Dashboard</span>
+      </a>
+      <a href="practice.html" class="nav-item" id="nav-practice">
+        <span class="nav-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>
+        </span>
+        <span>Practice</span>
+      </a>
+      <a href="#" class="nav-item nav-item-locked" id="nav-mocktest" title="Sắp ra mắt – Phase 2">
+        <span class="nav-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </span>
+        <span>Mock test</span>
+        <span class="nav-badge-lock">🔒</span>
+      </a>
+      <a href="library.html" class="nav-item" id="nav-library">
+        <span class="nav-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </span>
+        <span>Library</span>
+      </a>
+      <a href="guide.html" class="nav-item" id="nav-guide">
+        <span class="nav-icon">
+          <svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v1m0 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </span>
+        <span>Hướng dẫn</span>
+      </a>
+    </nav>
+
+    <div class="sidebar-user">
+      <div class="user-avatar" id="user-avatar-btn">M</div>
+      <div class="user-info">
+        <span class="user-name">Minh</span>
+        <span class="user-role">Tài khoản của tôi</span>
+      </div>
+      <span class="user-chevron">›</span>
+    </div>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main-content">
+    <!-- Top bar -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="greeting">Chào Minh 👋</h1>
+        <div class="streak-badge">
+          <span class="streak-icon">⚡</span>
+          <span>Chuỗi <strong>12</strong> ngày</span>
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="topbar-stats">
+          <div class="stat-pill">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M12 2a10 10 0 110 20A10 10 0 0112 2zm0 5v5l3 3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>48 phút tuần này</span>
+          </div>
+          <div class="stat-pill">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>7 buổi</span>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero feature card -->
+    <section class="hero-card" id="main-feature-section">
+      <div class="hero-card-header">
+        <span class="section-label">TÍNH NĂNG CHÍNH</span>
+      </div>
+      <h2 class="hero-title">Trò chuyện qua video YouTube</h2>
+      <p class="hero-desc">Dán link YouTube có phụ đề để bắt đầu luyện tập</p>
+
+      <div class="url-input-group" id="url-input-group">
+        <div class="url-input-wrapper">
+          <span class="url-icon">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </span>
+          <input
+            type="text"
+            id="youtube-url"
+            class="url-input"
+            placeholder="https://www.youtube.com/watch?v=..."
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button class="url-clear" id="url-clear-btn" aria-label="Xóa URL" style="display:none">×</button>
+        </div>
+
+        <div class="input-actions">
+          <button class="btn-primary" id="start-btn" onclick="handleStartSession()">
+            <span class="btn-icon">
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M17 9l5-3v12l-5-3" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+            </span>
+            <span id="start-btn-text">Bắt đầu hội thoại</span>
+          </button>
+          <p class="input-hint">
+            <svg width="14" height="14" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v1m0 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            AI sẽ tạo ngữ cảnh từ transcript video để trò chuyện cùng bạn.
+          </p>
+        </div>
+      </div>
+
+      <!-- Processing state (hidden by default) -->
+      <div class="processing-state" id="processing-state" style="display:none">
+        <div class="processing-animation">
+          <div class="pulse-ring"></div>
+          <div class="pulse-ring delay-1"></div>
+          <div class="pulse-ring delay-2"></div>
+          <svg class="processing-icon" width="28" height="28" fill="none" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2" fill="#4f46e5" opacity=".15"/><rect x="2" y="7" width="15" height="10" rx="2" stroke="#4f46e5" stroke-width="1.8"/><path d="M17 9l5-3v12l-5-3" stroke="#4f46e5" stroke-width="1.8" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="processing-text">
+          <p class="processing-title" id="processing-title">Đang lấy transcript…</p>
+          <p class="processing-sub" id="processing-sub">Vui lòng chờ trong giây lát</p>
+        </div>
+        <div class="processing-steps">
+          <div class="step-item active" id="step-transcript">
+            <div class="step-dot"></div><span>Trích transcript</span>
+          </div>
+          <div class="step-item" id="step-chunk">
+            <div class="step-dot"></div><span>Chunking nội dung</span>
+          </div>
+          <div class="step-item" id="step-summary">
+            <div class="step-dot"></div><span>Tạo summary</span>
+          </div>
+          <div class="step-item" id="step-ready">
+            <div class="step-dot"></div><span>Sẵn sàng hội thoại</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom two columns -->
+    <div class="bottom-grid">
+
+      <!-- Left: Other features (locked) -->
+      <section class="feature-grid" id="other-features-section">
+        <h3 class="section-title">CÁC TÍNH NĂNG KHÁC</h3>
+
+        <div class="feature-card feature-card-locked" id="feature-skill-test">
+          <div class="feature-card-top">
+            <div class="feature-icon feature-icon-locked">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+            </div>
+            <span class="feature-tag feature-tag-soon">🚀 SẮP RA MẮT</span>
+          </div>
+          <div class="feature-card-body">
+            <h4 class="feature-name">Luyện kỹ năng &amp; thi thử</h4>
+            <p class="feature-desc">Part 1, 2, 3 và Mock Test</p>
+          </div>
+          <div class="feature-lock-overlay">
+            <div class="lock-icon">🔒</div>
+            <p class="lock-text">Tính năng Phase 2</p>
+          </div>
+        </div>
+
+        <div class="feature-card feature-card-locked" id="feature-scoring">
+          <div class="feature-card-top">
+            <div class="feature-icon feature-icon-locked">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z" stroke="currentColor" stroke-width="1.6"/></svg>
+            </div>
+            <span class="feature-tag feature-tag-locked">🔒 CHƯA MỞ KHÓA</span>
+          </div>
+          <div class="feature-card-body">
+            <h4 class="feature-name">Chấm điểm IELTS AI</h4>
+            <p class="feature-desc">Đánh giá band score theo tiêu chí chính thức</p>
+          </div>
+          <div class="feature-lock-overlay">
+            <div class="lock-icon">🔒</div>
+            <p class="lock-text">Tính năng Phase 2</p>
+          </div>
+        </div>
+
+        <div class="feature-card feature-card-locked" id="feature-pronunciation">
+          <div class="feature-card-top">
+            <div class="feature-icon feature-icon-locked">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 1a3 3 0 013 3v8a3 3 0 01-6 0V4a3 3 0 013-3z" stroke="currentColor" stroke-width="1.6"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            </div>
+            <span class="feature-tag feature-tag-locked">🔒 CHƯA MỞ KHÓA</span>
+          </div>
+          <div class="feature-card-body">
+            <h4 class="feature-name">Pronunciation Assessment</h4>
+            <p class="feature-desc">Đánh giá phát âm chi tiết từng từ</p>
+          </div>
+          <div class="feature-lock-overlay">
+            <div class="lock-icon">🔒</div>
+            <p class="lock-text">Tính năng Phase 2</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Recent sessions -->
+      <section class="recent-section" id="recent-sessions-section">
+        <div class="section-header-row">
+          <h3 class="section-title">BUỔI LUYỆN GẦN ĐÂY (VIDEO TALK)</h3>
+          <a href="library.html" class="see-all-link">Xem tất cả →</a>
+        </div>
+
+        <div class="session-list" id="session-list">
+          <!-- Sessions rendered by JS -->
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Toast notification -->
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <!-- Locked feature modal -->
+  <div class="modal-overlay" id="lock-modal" style="display:none" onclick="closeLockModal()">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-icon">🔒</div>
+      <h3 class="modal-title">Tính năng Phase 2</h3>
+      <p class="modal-desc">Tính năng này sẽ được mở khoá ở phiên bản tiếp theo. Hiện tại hãy trải nghiệm hội thoại video YouTube nhé!</p>
+      <button class="btn-primary" onclick="closeLockModal()" style="width:100%;justify-content:center;">Đã hiểu</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

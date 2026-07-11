@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hội thoại – AI Speaking Coach</title>
+  <meta name="description" content="Màn hình hội thoại giọng nói với AI theo ngữ cảnh video YouTube." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="call.css" />
+</head>
+<body>
+
+  <!-- Sidebar (same as dashboard) -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <img src="../logo.png" alt="AI Speaking Coach Logo" class="logo-img" />
+      <div class="logo-text">
+        <span class="logo-title">AI SPEAKING</span>
+        <span class="logo-subtitle">COACH</span>
+      </div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html" class="nav-item" id="nav-dashboard">
+        <span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity=".9"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/></svg></span>
+        <span>Dashboard</span>
+      </a>
+      <a href="practice.html" class="nav-item active" id="nav-practice">
+        <span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span>
+        <span>Practice</span>
+      </a>
+      <a href="#" class="nav-item nav-item-locked" id="nav-mocktest" title="Phase 2">
+        <span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span>Mock test</span>
+        <span class="nav-badge-lock">🔒</span>
+      </a>
+      <a href="library.html" class="nav-item" id="nav-library">
+        <span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>
+        <span>Library</span>
+      </a>
+      <a href="guide.html" class="nav-item" id="nav-guide">
+        <span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v1m0 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span>
+        <span>Hướng dẫn</span>
+      </a>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar">M</div>
+      <div class="user-info">
+        <span class="user-name">Minh</span>
+        <span class="user-role">Tài khoản của tôi</span>
+      </div>
+      <span class="user-chevron">›</span>
+    </div>
+  </aside>
+
+  <!-- Call main area -->
+  <main class="call-main">
+
+    <!-- Header bar -->
+    <div class="call-header">
+      <a href="index.html" class="back-btn" id="back-btn" aria-label="Quay lại Dashboard">
+        <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        Quay lại
+      </a>
+      <div class="call-header-center">
+        <span class="call-header-badge">
+          <span class="live-dot"></span> ĐANG HỌC
+        </span>
+        <span class="call-timer" id="call-timer">00:00</span>
+      </div>
+      <div class="call-header-right">
+        <button class="icon-btn" id="mute-btn" title="Tắt tiếng" onclick="toggleMute()">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" id="mute-icon"><path d="M12 1a3 3 0 013 3v8a3 3 0 01-6 0V4a3 3 0 013-3z" stroke="currentColor" stroke-width="1.8"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+        <button class="icon-btn icon-btn-danger" id="end-btn" title="Kết thúc buổi" onclick="confirmEnd()">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Main call layout -->
+    <div class="call-layout">
+
+      <!-- Left: Video info + AI orb -->
+      <div class="call-center-col">
+
+        <!-- Video context card -->
+        <div class="video-context-card" id="video-context-card">
+          <div class="video-thumb" id="video-thumb">
+            <svg width="28" height="28" fill="none" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2" fill="white" opacity=".2"/><rect x="2" y="7" width="15" height="10" rx="2" stroke="white" stroke-width="1.6"/><path d="M17 9l5-3v12l-5-3" stroke="white" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="video-context-info">
+            <span class="video-context-label">Đang luyện theo video</span>
+            <span class="video-context-title" id="video-title">Đang tải…</span>
+            <span class="video-context-meta" id="video-meta">Chuẩn bị ngữ cảnh</span>
+          </div>
+          <a class="video-yt-link" id="video-yt-link" href="#" target="_blank" rel="noopener" title="Xem trên YouTube">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="#ff0000"><path d="M23.498 6.186a3.016 3.016 0 00-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 00.502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 002.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 002.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+          </a>
+        </div>
+
+        <!-- AI Orb -->
+        <div class="orb-section">
+          <div class="ai-orb-wrapper" id="orb-wrapper">
+            <div class="orb-ring"></div>
+            <div class="orb-ring"></div>
+            <div class="orb-ring"></div>
+            <div class="ai-orb" id="ai-orb">
+              <svg width="36" height="36" fill="none" viewBox="0 0 24 24"><path d="M12 1a3 3 0 013 3v8a3 3 0 01-6 0V4a3 3 0 013-3z" stroke="white" stroke-width="1.8"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </div>
+          </div>
+          <p class="orb-status" id="orb-status">Nhấn mic để bắt đầu nói</p>
+          <p class="orb-hint" id="orb-hint">AI sẽ lắng nghe và trả lời theo chủ đề video</p>
+        </div>
+
+        <!-- VAD visualizer -->
+        <div class="vad-section" id="vad-section">
+          <div class="vad-bar" id="vad-bar">
+            <!-- JS renders bars -->
+          </div>
+          <span class="vad-label" id="vad-label">Chờ giọng nói…</span>
+        </div>
+
+        <!-- Mic control -->
+        <div class="mic-controls">
+          <button class="mic-btn" id="mic-btn" onclick="toggleMic()" aria-label="Bật/tắt microphone">
+            <svg id="mic-svg" width="28" height="28" fill="none" viewBox="0 0 24 24"><path d="M12 1a3 3 0 013 3v8a3 3 0 01-6 0V4a3 3 0 013-3z" stroke="white" stroke-width="1.8"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4M8 23h8" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+          <span class="mic-label" id="mic-label">Giữ để nói</span>
+        </div>
+
+        <!-- Quick actions -->
+        <div class="call-actions">
+          <button class="btn-secondary" id="hint-btn" onclick="requestHint()">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v1m0 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            Gợi ý câu hỏi
+          </button>
+          <button class="btn-secondary" id="topic-btn" onclick="changeTopic()">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Đổi chủ đề
+          </button>
+          <button class="btn-danger" id="end-call-btn" onclick="confirmEnd()">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            Kết thúc
+          </button>
+        </div>
+      </div>
+
+      <!-- Right: Conversation transcript -->
+      <div class="transcript-col">
+        <div class="transcript-header">
+          <h2 class="transcript-title">Hội thoại</h2>
+          <button class="icon-btn" id="clear-transcript-btn" onclick="clearTranscript()" title="Xóa lịch sử">
+            <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </div>
+
+        <div class="transcript-scroll" id="transcript-scroll">
+          <div class="transcript-messages" id="transcript-messages">
+            <!-- Starter message -->
+            <div class="msg-row msg-ai" id="intro-msg">
+              <div class="msg-avatar ai-avatar">AI</div>
+              <div class="msg-bubble ai-bubble">
+                <p>Xin chào! Tôi đã đọc xong nội dung video của bạn. Hãy bắt đầu nói chuyện về chủ đề này nhé. Bạn có thể hỏi bất cứ điều gì liên quan đến video! 🎙️</p>
+                <span class="msg-time">Vừa xong</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Typing indicator -->
+        <div class="typing-indicator" id="typing-indicator" style="display:none">
+          <div class="msg-avatar ai-avatar">AI</div>
+          <div class="typing-bubble">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+          </div>
+        </div>
+
+        <!-- Suggested prompts -->
+        <div class="suggested-prompts" id="suggested-prompts">
+          <p class="prompts-label">Gợi ý:</p>
+          <div class="prompt-chips" id="prompt-chips">
+            <button class="prompt-chip" onclick="sendPrompt(this)">What's the main idea?</button>
+            <button class="prompt-chip" onclick="sendPrompt(this)">Can you explain more?</button>
+            <button class="prompt-chip" onclick="sendPrompt(this)">What do you think about…?</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- End session confirmation modal -->
+  <div class="modal-overlay" id="end-modal" style="display:none" onclick="closeEndModal()">
+    <div class="modal-card" onclick="event.stopPropagation()">
+      <div class="modal-icon">📋</div>
+      <h3 class="modal-title">Kết thúc buổi luyện?</h3>
+      <p class="modal-desc">Buổi luyện sẽ được lưu vào lịch sử. Bạn có thể bắt đầu lại bất cứ lúc nào!</p>
+      <div style="display:flex;gap:12px;margin-top:8px;">
+        <button class="btn-secondary" style="flex:1;justify-content:center;" onclick="closeEndModal()">Tiếp tục</button>
+        <button class="btn-danger"    style="flex:1;justify-content:center;" onclick="endSession()">Kết thúc</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" role="alert" aria-live="polite"></div>
+
+  <script src="call.js"></script>
+</body>
+</html>

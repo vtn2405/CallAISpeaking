@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Practice – AI Speaking Coach</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <img src="../logo.png" alt="Logo" class="logo-img" />
+      <div class="logo-text"><span class="logo-title">AI SPEAKING</span><span class="logo-subtitle">COACH</span></div>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="index.html"   class="nav-item"><span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity=".9"/><rect x="14" y="3" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/><rect x="3" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/><rect x="14" y="14" width="7" height="7" rx="1.5" fill="currentColor" opacity=".5"/></svg></span><span>Dashboard</span></a>
+      <a href="practice.html" class="nav-item active"><span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><span>Practice</span></a>
+      <a href="#" class="nav-item nav-item-locked"><span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><path d="M9 11l3 3L22 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span>Mock test</span><span class="nav-badge-lock">🔒</span></a>
+      <a href="library.html" class="nav-item"><span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M3 9h18M9 21V9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span><span>Library</span></a>
+      <a href="guide.html"   class="nav-item"><span class="nav-icon"><svg width="20" height="20" fill="none" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.8"/><path d="M12 8v1m0 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span>Hướng dẫn</span></a>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-avatar">M</div>
+      <div class="user-info"><span class="user-name">Minh</span><span class="user-role">Tài khoản của tôi</span></div>
+      <span class="user-chevron">›</span>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <h1 class="greeting" style="font-size:24px;">Luyện tập</h1>
+    </header>
+
+    <!-- Only Phase 1 feature -->
+    <section class="hero-card" style="max-width:640px;">
+      <div class="hero-card-header">
+        <span class="section-label">TÍNH NĂNG PHASE 1</span>
+      </div>
+      <h2 class="hero-title">Hội thoại qua video YouTube</h2>
+      <p class="hero-desc">Dán link YouTube có phụ đề để bắt đầu luyện tập ngay</p>
+      <div style="display:flex;gap:12px;">
+        <a href="index.html" class="btn-primary">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24"><rect x="2" y="7" width="15" height="10" rx="2" stroke="white" stroke-width="1.8"/><path d="M17 9l5-3v12l-5-3" stroke="white" stroke-width="1.8" stroke-linejoin="round"/></svg>
+          Bắt đầu ngay
+        </a>
+      </div>
+    </section>
+
+    <!-- Phase 2 locked -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:16px;max-width:860px;">
+      <div class="feature-card feature-card-locked" onclick="alert('Tính năng này sẽ có trong Phase 2!')">
+        <div class="feature-card-top">
+          <div class="feature-icon feature-icon-locked">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>
+          </div>
+          <span class="feature-tag feature-tag-soon">🚀 SẮP RA MẮT</span>
+        </div>
+        <div class="feature-card-body">
+          <h4 class="feature-name">IELTS Part 1 – Câu hỏi cá nhân</h4>
+          <p class="feature-desc">Luyện trả lời câu hỏi Part 1 theo chủ đề IELTS</p>
+        </div>
+        <div class="feature-lock-overlay">
+          <div class="lock-icon">🔒</div>
+          <p class="lock-text">Phase 2</p>
+        </div>
+      </div>
+
+      <div class="feature-card feature-card-locked" onclick="alert('Tính năng này sẽ có trong Phase 2!')">
+        <div class="feature-card-top">
+          <div class="feature-icon feature-icon-locked">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 12c0 4.97-4.03 9-9 9S3 16.97 3 12 7.03 3 12 3s9 4.03 9 9z" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <span class="feature-tag feature-tag-locked">🔒 CHƯA MỞ KHÓA</span>
+        </div>
+        <div class="feature-card-body">
+          <h4 class="feature-name">IELTS Part 2 – Cue Card</h4>
+          <p class="feature-desc">Nói liên tục 2 phút về một chủ đề cho sẵn</p>
+        </div>
+        <div class="feature-lock-overlay">
+          <div class="lock-icon">🔒</div>
+          <p class="lock-text">Phase 2</p>
+        </div>
+      </div>
+
+      <div class="feature-card feature-card-locked" onclick="alert('Tính năng này sẽ có trong Phase 2!')">
+        <div class="feature-card-top">
+          <div class="feature-icon feature-icon-locked">
+            <svg width="22" height="22" fill="none" viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <span class="feature-tag feature-tag-locked">🔒 CHƯA MỞ KHÓA</span>
+        </div>
+        <div class="feature-card-body">
+          <h4 class="feature-name">IELTS Part 3 – Thảo luận</h4>
+          <p class="feature-desc">Tranh luận và trình bày quan điểm sâu hơn</p>
+        </div>
+        <div class="feature-lock-overlay">
+          <div class="lock-icon">🔒</div>
+          <p class="lock-text">Phase 2</p>
+        </div>
+      </div>
+    </div>
+  </main>
+</body>
+</html>

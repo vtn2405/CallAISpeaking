@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SessionStatus {
+  CREATED
+  PROCESSING
+  READY
+  ACTIVE
+  ENDED
+  ERROR
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String?   @unique
+  name         String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+}
+
+model Video {
+  id           String    @id @default(cuid())
+  youtubeId    String    @unique
+  url          String
+  title        String?
+  durationSec  Int?
+  hasSubtitle  Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+  chunks       TranscriptChunk[]
+  summaries    VideoSummary[]
+}
+
+model VideoSummary {
+  id           String    @id @default(cuid())
+  videoId      String
+  content      String
+  model        String?
+  createdAt    DateTime  @default(now())
+  video        Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+}
+
+model TranscriptChunk {
+  id           String    @id @default(cuid())
+  videoId      String
+  startSec     Int
+  endSec       Int
+  content      String
+  chunkIndex   Int
+  createdAt    DateTime  @default(now())
+  video        Video     @relation(fields: [videoId], references: [id], onDelete: Cascade)
+
+  @@index([videoId, startSec, endSec])
+}
+
+model Session {
+  id              String         @id @default(cuid())
+  userId          String?
+  videoId         String
+  status          SessionStatus  @default(CREATED)
+  mode            String         @default("video-talk")
+  startedAt       DateTime?      
+  endedAt         DateTime?
+  lastError       String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  video           Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  messages        Message[]
+
+  @@index([userId, createdAt])
+  @@index([videoId, createdAt])
+}
+
+model Message {
+  id              String      @id @default(cuid())
+  sessionId       String
+  role            MessageRole
+  content         String
+  audioUrl        String?
+  sttText         String?
+  ttsText         String?
+  createdAt       DateTime    @default(now())
+  session         Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId, createdAt])
+}
