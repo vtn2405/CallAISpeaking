@@ -3,13 +3,25 @@
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/components/ui/Toast';
+import { motion, AnimatePresence } from 'motion/react';
+import * as Popover from '@radix-ui/react-popover';
+import { 
+  ClipboardText, 
+  Check, 
+  Faders, 
+  PlayCircle, 
+  VideoCamera, 
+  UserPlus, 
+  Info,
+  YoutubeLogo,
+  X
+} from '@phosphor-icons/react';
 
-// ---- Processing step configuration ----
 const STEPS = [
-  { key: 'transcript', label: 'Trích transcript',   title: 'Đang lấy transcript…',  sub: 'Kết nối tới YouTube API',               ms: 1200 },
-  { key: 'chunk',      label: 'Chunking nội dung',  title: 'Đang chunk nội dung…',  sub: 'Phân tách video thành các đoạn',       ms: 900 },
-  { key: 'summary',    label: 'Tạo summary',        title: 'Đang tạo summary…',     sub: 'AI đang tóm tắt nội dung video',       ms: 1100 },
-  { key: 'ready',      label: 'Sẵn sàng hội thoại', title: 'Sẵn sàng hội thoại!',  sub: 'Đang mở màn hội thoại…',               ms: 700 },
+  { key: 'transcript', label: 'Trích transcript', title: 'Đang lấy transcript…', sub: 'Kết nối tới YouTube API', ms: 1200 },
+  { key: 'chunk', label: 'Chunking nội dung', title: 'Đang chunk nội dung…', sub: 'Phân tách video thành các đoạn', ms: 900 },
+  { key: 'summary', label: 'Tạo summary', title: 'Đang tạo summary…', sub: 'AI đang tóm tắt nội dung video', ms: 1100 },
+  { key: 'ready', label: 'Sẵn sàng hội thoại', title: 'Sẵn sàng hội thoại!', sub: 'Đang mở màn hội thoại…', ms: 700 },
 ] as const;
 
 type StepKey = (typeof STEPS)[number]['key'];
@@ -39,13 +51,12 @@ export default function YoutubeInput() {
   const [mode, setMode] = useState<ChatMode>('video_chat');
   const [processing, setProcessing] = useState(false);
   const [stepStatuses, setStepStatuses] = useState<Record<StepKey, StepStatus>>({
-    transcript: 'idle',
-    chunk: 'idle',
-    summary: 'idle',
-    ready: 'idle',
+    transcript: 'idle', chunk: 'idle', summary: 'idle', ready: 'idle',
   });
   const [currentTitle, setCurrentTitle] = useState('');
-  const [currentSub, setCurrentSub]     = useState('');
+  const [currentSub, setCurrentSub] = useState('');
+  
+  const [pasted, setPasted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef(false);
 
@@ -69,18 +80,14 @@ export default function YoutubeInput() {
         if (abortRef.current) break;
         const step = STEPS[i];
 
-        // Mark previous step done
         if (i > 0) {
           const prevKey = STEPS[i - 1].key;
           setStepStatuses((s) => ({ ...s, [prevKey]: 'done' }));
         }
-        // Mark current step active
         setStepStatuses((s) => ({ ...s, [step.key]: 'active' }));
         setCurrentTitle(step.title);
         setCurrentSub(step.sub);
 
-        // In production: call real API here
-        // e.g. await fetch('/api/videos/context', { method: 'POST', body: JSON.stringify({ url: trimmed }) })
         await delay(step.ms);
       }
 
@@ -99,139 +106,170 @@ export default function YoutubeInput() {
     if (e.key === 'Enter') handleSubmit();
   };
 
-  // Input form state
-  if (!processing) {
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      if (text) {
+        setUrl(text);
+        setPasted(true);
+        setTimeout(() => setPasted(false), 1500);
+      }
+    } catch (err) {
+      console.error('Failed to read clipboard contents: ', err);
+      showToast('❌ Không thể truy cập clipboard.', { type: 'error' });
+    }
+  };
+
+  if (processing) {
     return (
-      <div className="url-input-group">
-        <div className="url-input-wrapper">
-          <span className="url-icon" aria-hidden="true">
-            <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-              <path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-              <path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </span>
+      <div className="flex flex-col items-center gap-6 py-6" role="status" aria-live="polite">
+        <div className="relative w-20 h-20 flex items-center justify-center">
+          <motion.div
+            className="absolute inset-0 rounded-full border-2 border-zinc-200"
+            animate={{ scale: [1, 1.2], opacity: [1, 0] }}
+            transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
+          />
+          <YoutubeLogo weight="duotone" size={36} className="text-zinc-800 z-10" />
+        </div>
+        <div className="text-center">
+          <h3 className="text-lg font-bold text-zinc-900">{currentTitle}</h3>
+          <p className="text-sm text-zinc-500 mt-1">{currentSub}</p>
+        </div>
+        <div className="flex flex-wrap justify-center gap-6 mt-2">
+          {STEPS.map((step) => {
+            const status = stepStatuses[step.key];
+            return (
+              <div key={step.key} className={`flex items-center gap-2 text-sm transition-colors duration-300 ${status === 'active' ? 'text-zinc-900 font-semibold' : status === 'done' ? 'text-emerald-600 font-semibold' : 'text-zinc-400'}`}>
+                <div className="relative flex items-center justify-center w-5 h-5">
+                  {status === 'done' ? (
+                    <Check weight="bold" size={16} />
+                  ) : (
+                    <div className={`w-2.5 h-2.5 rounded-full ${status === 'active' ? 'bg-zinc-900' : 'bg-zinc-300'}`} />
+                  )}
+                  {status === 'active' && (
+                    <motion.div
+                      className="absolute inset-0 border border-zinc-900 rounded-full"
+                      animate={{ scale: [1, 1.5], opacity: [1, 0] }}
+                      transition={{ repeat: Infinity, duration: 1 }}
+                    />
+                  )}
+                </div>
+                {step.label}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Input Group */}
+      <div className="flex flex-col sm:flex-row gap-3 min-w-0">
+        <div className="relative flex-1 min-w-0 group">
+          <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
+            <YoutubeLogo size={20} className="text-zinc-400 group-focus-within:text-zinc-800 transition-colors" />
+          </div>
           <input
             ref={inputRef}
             type="url"
-            id="youtube-url"
-            className="url-input"
+            className="w-full h-14 pl-12 pr-28 bg-zinc-50 border-2 border-zinc-200 rounded-2xl text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-300 focus:bg-white focus:border-zinc-800"
             placeholder="https://www.youtube.com/watch?v=..."
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             onKeyDown={handleKeyDown}
             autoComplete="off"
             spellCheck={false}
-            aria-label="YouTube URL"
           />
           {url && (
             <button
               type="button"
-              className="url-clear"
-              aria-label="Xóa URL"
+              className="absolute inset-y-0 right-14 flex items-center px-2 text-zinc-400 hover:text-zinc-800 transition-colors"
               onClick={() => { setUrl(''); inputRef.current?.focus(); }}
+              aria-label="Xóa URL"
             >
-              ×
+              <X size={18} weight="bold" />
             </button>
           )}
+          
+          <div className="absolute inset-y-0 right-1.5 flex items-center">
+            <motion.button
+              whileTap={{ scale: 0.95 }}
+              onClick={handlePaste}
+              className="flex items-center gap-1.5 h-11 px-3.5 bg-white border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-700 shadow-sm hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
+              aria-label="Dán từ bộ nhớ tạm"
+            >
+              {pasted ? <Check size={16} weight="bold" className="text-emerald-600" /> : <ClipboardText size={16} weight="bold" />}
+              <span>Dán</span>
+            </motion.button>
+          </div>
         </div>
 
-        {/* Mode selector */}
-        <div className="mode-selector" role="group" aria-label="Chọn chế độ luyện tập">
-          <button
-            type="button"
-            id="mode-video-chat"
-            className={`mode-btn${mode === 'video_chat' ? ' mode-btn--active' : ''}`}
-            onClick={() => setMode('video_chat')}
-            aria-pressed={mode === 'video_chat'}
-          >
-            <span className="mode-btn-icon" aria-hidden="true">
-              <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-                <rect x="2" y="7" width="15" height="10" rx="2" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M17 9l5-3v12l-5-3" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span>
-              <strong>Video Chat</strong>
-              <span className="mode-btn-sub">Hội thoại tự nhiên theo video</span>
-            </span>
-          </button>
 
-          <button
-            type="button"
-            id="mode-beginner"
-            className={`mode-btn${mode === 'beginner' ? ' mode-btn--active' : ''}`}
-            onClick={() => setMode('beginner')}
-            aria-pressed={mode === 'beginner'}
-          >
-            <span className="mode-btn-icon" aria-hidden="true">
-              <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-                <path d="M9 12l2 2 4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </span>
-            <span>
-              <strong>Người mới</strong>
-              <span className="mode-btn-sub">Câu hỏi đơn giản, có gợi ý câu</span>
-            </span>
-          </button>
-        </div>
+      </div>
 
-        <div className="input-actions">
-          <button
-            type="button"
-            className="btn-primary"
-            id="start-session-btn"
-            onClick={handleSubmit}
-          >
-            <span className="btn-icon" aria-hidden="true">
-              <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-                <rect x="2" y="7" width="15" height="10" rx="2" stroke="white" strokeWidth="1.8" />
-                <path d="M17 9l5-3v12l-5-3" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
-              </svg>
-            </span>
-            Bắt đầu hội thoại
-          </button>
-          <p className="input-hint">
-            <svg width="14" height="14" fill="none" viewBox="0 0 24 24">
-              <circle cx="12" cy="12" r="9" stroke="currentColor" strokeWidth="1.8" />
-              <path d="M12 8v1m0 3v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-            AI sẽ tạo ngữ cảnh từ transcript video để trò chuyện cùng bạn.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  // Processing state
-  return (
-    <div className="processing-state" role="status" aria-live="polite">
-      <div className="processing-animation" aria-hidden="true">
-        <div className="pulse-ring" />
-        <div className="pulse-ring delay-1" />
-        <div className="pulse-ring delay-2" />
-        <svg className="processing-icon" width="28" height="28" fill="none" viewBox="0 0 24 24">
-          <rect x="2" y="7" width="15" height="10" rx="2" fill="#4f46e5" opacity=".15" />
-          <rect x="2" y="7" width="15" height="10" rx="2" stroke="#4f46e5" strokeWidth="1.8" />
-          <path d="M17 9l5-3v12l-5-3" stroke="#4f46e5" strokeWidth="1.8" strokeLinejoin="round" />
-        </svg>
-      </div>
-      <div className="processing-text">
-        <p className="processing-title">{currentTitle}</p>
-        <p className="processing-sub">{currentSub}</p>
-      </div>
-      <div className="processing-steps">
-        {STEPS.map((step) => {
-          const status = stepStatuses[step.key];
+      {/* Bento Switch for Modes */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 bg-zinc-100/80 rounded-3xl">
+        {[
+          {
+            id: 'video_chat' as ChatMode,
+            title: 'Tự nhiên',
+            desc: 'Hội thoại tự nhiên 1.0x, phản hồi nhanh.',
+            icon: VideoCamera
+          },
+          {
+            id: 'beginner' as ChatMode,
+            title: 'Người mới',
+            desc: 'Tốc độ 0.8x, có gợi ý từ và giải thích.',
+            icon: UserPlus
+          }
+        ].map((item) => {
+          const isActive = mode === item.id;
+          const Icon = item.icon;
           return (
-            <div key={step.key} className={`step-item ${status}`}>
-              <div className="step-dot" aria-hidden="true">
-                {status === 'done' && '✓'}
+            <button
+              key={item.id}
+              onClick={() => setMode(item.id)}
+              className="relative flex flex-col items-start p-4 rounded-2xl text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-800 group"
+            >
+              {isActive && (
+                <motion.div
+                  layoutId="mode-switch-active"
+                  className="absolute inset-0 bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-zinc-200/50"
+                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                />
+              )}
+              <div className="relative z-10 flex items-center gap-3 mb-1.5">
+                <div className={`flex items-center justify-center w-8 h-8 rounded-xl transition-colors duration-300 ${isActive ? 'bg-primary-50 text-primary-600' : 'bg-zinc-200 text-zinc-500 group-hover:bg-zinc-300'}`}>
+                  <Icon size={16} weight={isActive ? "fill" : "bold"} />
+                </div>
+                <span className={`font-bold transition-colors duration-300 ${isActive ? 'text-zinc-900' : 'text-zinc-600 group-hover:text-zinc-900'}`}>
+                  {item.title}
+                </span>
               </div>
-              <span>{step.label}</span>
-            </div>
+              <span className={`relative z-10 text-[13px] leading-relaxed transition-colors duration-300 ${isActive ? 'text-zinc-600' : 'text-zinc-500'}`}>
+                {item.desc}
+              </span>
+            </button>
           );
         })}
+      </div>
+
+      {/* Action Button */}
+      <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
+        <motion.button
+          whileTap={{ scale: 0.98 }}
+          onClick={handleSubmit}
+          className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 h-14 bg-primary-600 text-white rounded-2xl font-bold hover:bg-primary-700 transition-colors shadow-[0_4px_16px_rgba(27,75,160,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-600"
+        >
+          <PlayCircle size={22} weight="fill" />
+          <span>Bắt đầu hội thoại</span>
+        </motion.button>
+        <p className="flex items-center gap-2 text-sm text-zinc-500">
+          <Info size={16} weight="bold" />
+          AI sẽ tự động tạo ngữ cảnh từ transcript.
+        </p>
       </div>
     </div>
   );

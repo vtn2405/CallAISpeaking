@@ -12,10 +12,18 @@
     "test:e2e:debug": "playwright test --debug"
   },
   "dependencies": {
+    "@phosphor-icons/react": "^2.1.10",
+    "@radix-ui/react-popover": "^1.1.19",
+    "@tailwindcss/postcss": "^4.3.2",
+    "clsx": "^2.1.1",
     "microsoft-cognitiveservices-speech-sdk": "^1.50.0",
+    "motion": "^12.42.2",
     "next": "16.2.10",
+    "postcss": "^8.5.16",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "tailwind-merge": "^3.6.0",
+    "tailwindcss": "^4.3.2"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

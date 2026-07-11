@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import LockedFeatureCardClient from '@/components/features/LockedFeatureCardClient';
+import { Plus, PlayCircle, VideoCamera } from '@phosphor-icons/react/dist/ssr';
 
 export const metadata: Metadata = {
   title: 'Practice',
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 const PHASE2_FEATURES = [
   {
     id: 'part1',
-    tag: { type: 'soon' as const, label: '🚀 SẮP RA MẮT' },
+    tag: { type: 'soon' as const, label: 'SẮP RA MẮT' },
     name: 'IELTS Part 1 – Câu hỏi cá nhân',
     desc: 'Luyện trả lời câu hỏi Part 1 theo chủ đề IELTS',
     icon: (
@@ -21,7 +22,7 @@ const PHASE2_FEATURES = [
   },
   {
     id: 'part2',
-    tag: { type: 'locked' as const, label: '🔒 CHƯA MỞ KHÓA' },
+    tag: { type: 'locked' as const, label: 'CHƯA MỞ KHÓA' },
     name: 'IELTS Part 2 – Cue Card',
     desc: 'Nói liên tục 2 phút về một chủ đề cho sẵn',
     icon: (
@@ -33,7 +34,7 @@ const PHASE2_FEATURES = [
   },
   {
     id: 'part3',
-    tag: { type: 'locked' as const, label: '🔒 CHƯA MỞ KHÓA' },
+    tag: { type: 'locked' as const, label: 'CHƯA MỞ KHÓA' },
     name: 'IELTS Part 3 – Thảo luận',
     desc: 'Tranh luận và trình bày quan điểm sâu hơn',
     icon: (
@@ -46,46 +47,17 @@ const PHASE2_FEATURES = [
 
 export default function PracticePage() {
   return (
-    <main className="main-content">
-      <header className="topbar">
-        <h1 className="greeting" style={{ fontSize: '24px' }}>
+    <main className="p-8 lg:p-12 xl:p-16 flex flex-col gap-10 max-w-6xl mx-auto w-full min-w-0">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
           Luyện tập
         </h1>
-        <Link href="/" className="btn-primary" style={{ fontSize: '13.5px', padding: '10px 20px' }}>
-          <svg width="16" height="16" fill="none" viewBox="0 0 24 24">
-            <path d="M12 5v14M5 12h14" stroke="white" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-          Buổi luyện mới
-        </Link>
       </header>
 
-      {/* Phase 1 active feature */}
-      <section className="hero-card" style={{ maxWidth: 640 }} aria-labelledby="practice-phase1-title">
-        <div className="hero-card-header">
-          <span className="section-label">TÍNH NĂNG PHASE 1</span>
-        </div>
-        <h2 className="hero-title" id="practice-phase1-title">
-          Hội thoại qua video YouTube
-        </h2>
-        <p className="hero-desc">Dán link YouTube có phụ đề để bắt đầu luyện tập ngay</p>
-        <Link href="/" className="btn-primary">
-          <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
-            <rect x="2" y="7" width="15" height="10" rx="2" stroke="white" strokeWidth="1.8" />
-            <path d="M17 9l5-3v12l-5-3" stroke="white" strokeWidth="1.8" strokeLinejoin="round" />
-          </svg>
-          Bắt đầu ngay
-        </Link>
-      </section>
+
 
       {/* Phase 2 locked grid */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))',
-          gap: '16px',
-          maxWidth: '860px',
-        }}
-      >
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
         {PHASE2_FEATURES.map((f) => (
           <LockedFeatureCardClient key={f.id} feature={f} />
         ))}

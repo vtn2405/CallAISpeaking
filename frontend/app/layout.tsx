@@ -1,11 +1,11 @@
 import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
+import { Geist } from 'next/font/google';
 import Sidebar from '@/components/Sidebar';
 import '../styles/globals.css';
 
-const inter = Inter({
+const geist = Geist({
   subsets: ['latin'],
-  variable: '--font-inter',
+  variable: '--font-geist-sans',
   display: 'swap',
 });
 
@@ -24,10 +24,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="vi" className={inter.variable}>
-      <body>
+    <html lang="vi" className={geist.variable}>
+      <body className="flex min-h-[100dvh] bg-offwhite text-zinc-900">
         <Sidebar />
-        {children}
+        <div className="flex-1 ml-[220px] w-full min-w-0 flex flex-col">
+          {children}
+        </div>
       </body>
     </html>
   );
