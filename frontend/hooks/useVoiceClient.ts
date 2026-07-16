@@ -477,11 +477,9 @@ export function useVoiceClient({
           }
         };
 
-        recorder.onstart = () => {
-          onSessionStateChangeRef.current('recording');
-          sessionStateRef.current = 'recording';
-        };
-
+        // Removed recorder.onstart because some browsers/environments fail to fire it,
+        // causing the UI to get stuck in the 'listening' (disabled) state indefinitely.
+        
         recorder.onstop = () => {
           // Handled in _commitTurn; nothing to do here
         };
@@ -490,6 +488,10 @@ export function useVoiceClient({
         console.log(`[gstack] MediaRecorder.start(100)`);
         recorder.start(100);
         isRecordingRef.current = true;
+        
+        // Set state synchronously so the user can immediately interact with the mic button
+        onSessionStateChangeRef.current('recording');
+        sessionStateRef.current = 'recording';
       })
       .catch((err) => {
         console.warn('[useVoiceClient] getUserMedia failed', err);
