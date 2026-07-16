@@ -29,6 +29,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import type { PipecatTransport } from '@/lib/transport';
 import type { MockTransport } from '@/lib/mockTransport';
 import { useAzureTTS } from './useAzureTTS';
+import { showToast } from '@/components/ui/Toast';
 import type {
   CallSessionState,
   GroqNormalizationResult,
@@ -496,6 +497,10 @@ export function useVoiceClient({
       .catch((err) => {
         console.warn('[useVoiceClient] getUserMedia failed', err);
         console.log(`[gstack] getUserMedia fail`, err);
+        
+        // Show an explicit toast to the user so they know it's a permission/hardware issue
+        showToast('Không thể truy cập Micro. Hãy kiểm tra quyền trên trình duyệt/Windows!', { type: 'error', duration: 4000 });
+        
         isRecordingRef.current = false;
         onSessionStateChangeRef.current('idle');
         sessionStateRef.current = 'idle';
