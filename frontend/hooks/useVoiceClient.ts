@@ -435,11 +435,7 @@ export function useVoiceClient({
     sessionStateRef.current = 'listening';
 
     const MIC_CONSTRAINTS: MediaStreamConstraints = {
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
+      audio: true, // Use a simple boolean instead of complex constraints to prevent privacy extensions from stripping it
     };
 
     // ── Mock mode ────────────────────────────────────────────────────────────
