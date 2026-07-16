@@ -30,13 +30,20 @@ interface AiPanelRightProps {
 }
 
 const STATUS_MAP: Record<CallSessionState, { label: string; dotClass: string }> = {
-  initializing: { label: 'Đang kết nối…',   dotClass: '' },
-  idle:         { label: 'Sẵn sàng',         dotClass: styles.ready },
-  listening:    { label: 'Đang lắng nghe',   dotClass: styles.listening },
-  thinking:     { label: 'Đang xử lý…',      dotClass: styles.thinking },
-  speaking:     { label: 'Đang trả lời',     dotClass: styles.speaking },
-  ended:        { label: 'Đã kết thúc',      dotClass: styles.ended },
+  initializing:      { label: 'Đang kết nối…',    dotClass: '' },
+  idle:              { label: 'Sẵn sàng',          dotClass: styles.ready },
+  listening:         { label: 'Đang lắng nghe',    dotClass: styles.listening },
+  recording:         { label: 'Đang ghi âm',       dotClass: styles.listening },
+  turn_candidate_end:{ label: 'Đang lắng nghe',    dotClass: styles.listening },
+  // speech_processing and thinking are merged into one label for the user —
+  // both are part of the same "AI is working on your turn" phase.
+  // Internal state names are preserved for logic; only the display is unified.
+  speech_processing: { label: 'Đang phản hồi…',   dotClass: styles.thinking },
+  thinking:          { label: 'Đang phản hồi…',   dotClass: styles.thinking },
+  speaking:          { label: 'Đang trả lời',      dotClass: styles.speaking },
+  ended:             { label: 'Đã kết thúc',       dotClass: styles.ended ?? '' },
 };
+
 
 export default function AiPanelRight({ 
   mode, 
@@ -50,10 +57,16 @@ export default function AiPanelRight({
 }: AiPanelRightProps) {
   const { label, dotClass } = STATUS_MAP[sessionState] ?? STATUS_MAP.idle;
 
+  const hasUserInteracted = messages.some(m => m.sender === 'user');
+  const displayLabel = (sessionState === 'idle' && hasUserInteracted) 
+    ? 'Đang trò chuyện' 
+    : label;
   const avatarClass = [
     styles.aiAvatarWrapper,
     sessionState === 'speaking' ? styles.speaking : '',
-    sessionState === 'thinking' ? styles.thinking : '',
+    sessionState === 'thinking' || sessionState === 'speech_processing' ? styles.thinking : '',
+    sessionState === 'listening' || sessionState === 'recording' || sessionState === 'turn_candidate_end' ? styles.listening : '',
+    sessionState === 'idle' ? styles.idle : '',
   ].filter(Boolean).join(' ');
 
   return (
@@ -85,16 +98,9 @@ export default function AiPanelRight({
         </div>
       )}
 
-      {/* AI Avatar */}
+      {/* AI Avatar (Organic Fluid Orb) */}
       <div className={avatarClass}>
-        <div className={styles.aiAvatarRings} aria-hidden="true">
-          <div className={styles.aiAvatarRing} />
-          <div className={styles.aiAvatarRing} />
-          <div className={styles.aiAvatarRing} />
-        </div>
-        <div className={styles.aiAvatar} role="img" aria-label="AI Speaking Coach">
-          🤖
-        </div>
+        <div className={styles.aiAvatar} role="img" aria-label="AI Speaking Coach" />
       </div>
 
       {/* Connection status */}
@@ -105,7 +111,7 @@ export default function AiPanelRight({
         data-testid={`ai-status-${sessionState}`}
       >
         <span className={`${styles.statusDot} ${dotClass}`} aria-hidden="true" />
-        {label}
+        {displayLabel}
       </div>
 
       {/* Subtitle rail — pointer-events:none, read-only visual */}

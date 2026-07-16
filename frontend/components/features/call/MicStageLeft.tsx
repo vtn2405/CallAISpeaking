@@ -9,24 +9,21 @@
  *   thinking   → amber slow wave (AI processing)
  *   speaking   → cyan fast pulse (AI responding)
  *   muted      → grey, no animation
- *
- * FluencyBooster appears below after silenceThreshold seconds of silence.
  */
 
+import { useState, useEffect } from 'react';
 import styles from '@/styles/CallFullscreen.module.css';
-import FluencyBooster from './FluencyBooster';
 import type { CallSessionState, MicState } from '@/types/call';
 
 interface MicStageLeftProps {
   mode?: 'video_chat' | 'beginner';
   micState: MicState;
   sessionState: CallSessionState;
-  silenceSeconds: number;
-  silenceThreshold?: number;
   onToggleMic: () => void;
-  /** Called when a fluency hint is clicked — no text sent, just highlight UX */
-  onHintClick?: (hint: string) => void;
-  boosterHiding?: boolean;
+  liveUserSubtitle?: string | null;
+  lastUserMessage?: string | null;
+  /** Normalized English from Groq — shown as 'AI hiểu là' when differs from verbatim. */
+  aiUnderstood?: string | null;
 }
 
 const MicIcon = ({ size = 40 }: { size?: number }) => (
@@ -66,16 +63,31 @@ export default function MicStageLeft({
   mode,
   micState,
   sessionState,
-  silenceSeconds,
-  silenceThreshold = 8,
   onToggleMic,
-  onHintClick,
-  boosterHiding = false,
+  liveUserSubtitle,
+  lastUserMessage,
+  aiUnderstood,
 }: MicStageLeftProps) {
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (micState === 'listening') {
+      setHasInteracted(true);
+    }
+  }, [micState]);
+
   const isListening = micState === 'listening';
-  const isMuted = micState === 'muted';
-  const isThinking = sessionState === 'thinking';
-  const isSpeaking = sessionState === 'speaking';
+  const isMuted     = micState === 'muted';
+  const isLocked    = micState === 'locked'; // AI is responding — full phase block
+  const isThinking  = sessionState === 'thinking' || sessionState === 'speech_processing';
+  const isSpeaking  = sessionState === 'speaking';
 
   // Halo wrapper class reflects the dominant state
   const haloClass = [
@@ -92,51 +104,48 @@ export default function MicStageLeft({
     isMuted     ? styles.muted     : '',
   ].filter(Boolean).join(' ');
 
-  // Status text — describes the USER's mic state only, not AI state.
-  // AI states (thinking / speaking) are shown in AiPanelRight, not here.
+  // Status text on the LEFT panel (user mic side only).
+  // During the full "locked" phase, show a single consistent label.
   const statusText =
-    isMuted      ? 'Mic đang tắt'
-    : isListening ? 'Đang lắng nghe…'
-    : isThinking  ? 'Đang chờ AI…'
-    : isSpeaking  ? 'Đang chờ AI…'
+    isMuted    ? 'Mic đang tắt'
+    : isListening ? 'Đang ghi âm…'
+    : isLocked    ? 'Đang phản hồi…'
     : sessionState === 'initializing' ? 'Đang kết nối…'
     : 'Nhấn để nói';
 
   const statusClass = [
     styles.micStatus,
     isListening ? styles.listening : '',
-    // Do NOT add speaking/thinking classes here — those belong to AiPanelRight
   ].filter(Boolean).join(' ');
-
-  // Show FluencyBooster only when user is idle and has been silent long enough
-  const showBooster =
-    !isListening && !isThinking && !isSpeaking &&
-    !isMuted && sessionState === 'idle' &&
-    silenceSeconds >= silenceThreshold;
 
   const micLabel =
     isMuted      ? 'Mic đang tắt'
-    : isListening ? 'Dừng nói'
+    : isListening ? 'Nhấn để kết thúc câu nói'
+    : isMobile    ? 'Nhấn để bắt đầu nói'
     : 'Nhấn để bắt đầu nói (hoặc nhấn Space)';
 
   return (
     <div className={styles.leftPanel}>
       <div className={styles.micStage}>
-        {/* Halo rings + Mic button */}
+        {/* Halo wrapper for diffused glow + Mic button */}
         <div className={haloClass} aria-hidden="true">
-          <div className={styles.haloRing} />
-          <div className={styles.haloRing} />
-          <div className={styles.haloRing} />
-
           <button
             id="mic-btn"
             data-testid="mic-toggle-button"
             type="button"
             className={micBtnClass}
-            onClick={onToggleMic}
+            onClick={(e) => {
+              console.log(`[gstack] mic button onClick. t=${performance.now().toFixed(1)}ms state=${sessionState}`);
+              onToggleMic();
+            }}
             aria-label={micLabel}
             aria-pressed={isListening}
-            disabled={isThinking || isSpeaking || sessionState === 'initializing'}
+            disabled={
+              isLocked ||
+              isMuted  ||
+              sessionState === 'initializing' ||
+              sessionState === 'listening'
+            }
           >
             {isMuted ? <MicMutedIcon size={40} /> : <MicIcon size={40} />}
           </button>
@@ -144,48 +153,25 @@ export default function MicStageLeft({
 
         {/* Status */}
         <p className={statusClass}>{statusText}</p>
-        {!isListening && !isThinking && !isSpeaking && !isMuted && (
-          <p className={styles.spaceHint}>Space hoặc nhấn mic</p>
+        {!isListening && !isThinking && !isSpeaking && !isMuted && !hasInteracted && (
+          <p className={styles.spaceHint}>{isMobile ? 'Nhấn mic để bắt đầu' : 'Space hoặc nhấn mic'}</p>
         )}
 
-        {/* Beginner Pill Buttons (Scratchpad equivalent) */}
-        {mode === 'beginner' && (
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '24px' }}>
-            {['Where', 'When', 'Because', 'Also...'].map(word => (
-              <button
-                key={word}
-                type="button"
-                style={{
-                  padding: '6px 16px',
-                  borderRadius: '20px',
-                  border: '1px solid rgba(255,255,255,0.15)',
-                  background: 'rgba(255,255,255,0.05)',
-                  color: 'rgba(255,255,255,0.85)',
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  transition: 'background 0.2s',
-                  fontFamily: 'inherit'
-                }}
-                onMouseOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
-                onMouseOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.05)'}
-                onClick={() => {
-                  if (onHintClick) onHintClick(word);
-                }}
-              >
-                {word}
-              </button>
-            ))}
+        {/* User STT Display */}
+        {(liveUserSubtitle || lastUserMessage) && (
+          <div className={styles.userSubtitleBox}>
+             <p className={styles.userSubtitleLabel}>Bạn nói</p>
+             <p className={`${styles.userSubtitleText} ${liveUserSubtitle ? styles.live : ''}`}>
+               {liveUserSubtitle || lastUserMessage}
+             </p>
+             {aiUnderstood && !liveUserSubtitle && (
+               <p className={styles.userSubtitleUnderstood}>
+                 AI hiểu là: {aiUnderstood}
+               </p>
+             )}
           </div>
         )}
       </div>
-
-      {/* Fluency Booster — only when idle & silent too long */}
-      {(showBooster || boosterHiding) && (
-        <FluencyBooster
-          onHintClick={onHintClick}
-          hiding={boosterHiding}
-        />
-      )}
     </div>
   );
 }

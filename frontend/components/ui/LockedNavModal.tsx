@@ -31,7 +31,7 @@ export default function LockedNavModal({ onClose }: Props) {
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 10 }}
         transition={{ type: "spring", duration: 0.5, bounce: 0.3 }}
-        className="relative w-full max-w-sm bg-white rounded-[28px] p-6 shadow-2xl overflow-hidden" 
+        className="relative w-full max-w-sm bg-white rounded-[16px] p-6 border border-hairline shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-hidden" 
         onClick={(e) => e.stopPropagation()}
       >
         <button 
@@ -53,7 +53,7 @@ export default function LockedNavModal({ onClose }: Props) {
         </p>
         
         <button
-          className="w-full flex items-center justify-center h-12 bg-primary-600 text-white font-bold rounded-xl hover:bg-primary-700 transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2"
+          className="w-full flex items-center justify-center h-11 bg-primary-600 text-white font-medium rounded-[8px] hover:bg-primary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2"
           onClick={onClose}
           type="button"
         >

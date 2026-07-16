@@ -25,6 +25,7 @@ import type { PipecatTransport } from './transport';
 export class WsTransport implements PipecatTransport {
   private ws: WebSocket | null = null;
   private listeners = new Map<string, Set<(data: unknown) => void>>();
+  private lastEventPayloads = new Map<string, unknown>();
   private readonly url: string;
 
   constructor(url: string) {
@@ -92,6 +93,12 @@ export class WsTransport implements PipecatTransport {
       this.listeners.set(event, new Set());
     }
     this.listeners.get(event)!.add(handler);
+
+    // Replay 'sticky' lifecycle events if they already fired and we just attached a listener.
+    // This prevents Strict Mode dropping `session.ready` during unmount/remount cycles.
+    if (event === 'session.ready' && this.lastEventPayloads.has('session.ready')) {
+      handler(this.lastEventPayloads.get('session.ready'));
+    }
   }
 
   off(event: string, handler: (data: unknown) => void): void {
@@ -101,6 +108,7 @@ export class WsTransport implements PipecatTransport {
   // ── Private helpers ────────────────────────────────────────────────────────
 
   private _emit(event: string, data: unknown): void {
+    this.lastEventPayloads.set(event, data);
     this.listeners.get(event)?.forEach((h) => h(data));
   }
 }

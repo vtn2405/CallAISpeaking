@@ -16,6 +16,7 @@
     "@radix-ui/react-popover": "^1.1.19",
     "@tailwindcss/postcss": "^4.3.2",
     "clsx": "^2.1.1",
+    "idb": "^8.0.3",
     "microsoft-cognitiveservices-speech-sdk": "^1.50.0",
     "motion": "^12.42.2",
     "next": "16.2.10",

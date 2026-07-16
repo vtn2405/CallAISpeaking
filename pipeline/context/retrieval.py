@@ -12,8 +12,8 @@ Strategy:
      instruction into the prompt.
 
 Public API:
-    chunks, confidence = find_relevant_chunks(query, chunks, top_n=3)
-        → (list[Chunk], "ok" | "low_confidence")
+    chunks, confidence = find_relevant_chunks(query, chunks, visited_indices, force_progression=False, top_n=3)
+        → (list[Chunk], "ok" | "low_confidence" | "progression" | "exhausted")
 
     query = build_retrieval_query(user_text, history, lookback=3)
         → str  (combined recent history + current user text for better semantic match)
@@ -61,6 +61,8 @@ def build_retrieval_query(
 def find_relevant_chunks(
     query: str,
     chunks: list["Chunk"],
+    visited_indices: set[int] | list[int] | None = None,
+    force_progression: bool = False,
     top_n: int = DEFAULT_TOP_N,
 ) -> tuple[list["Chunk"], str]:
     """
@@ -69,15 +71,19 @@ def find_relevant_chunks(
     Confidence levels:
         "ok"              — max TF-IDF score >= LOW_CONFIDENCE_THRESHOLD
         "low_confidence"  — max score < threshold; caller should respond conservatively
+        "progression"     — force_progression=True and found a new chunk to introduce
+        "exhausted"       — force_progression=True but all chunks have been visited
 
     Window expansion:
         For each selected chunk index i, also include i-1 and i+1 (clamped).
         Results are sorted chronologically (by chunk id) for narrative flow.
 
     Args:
-        query:  Combined retrieval query (from build_retrieval_query or plain user_text).
-        chunks: All fixed-time chunks for this session.
-        top_n:  Maximum number of base chunks to retrieve (before window expansion).
+        query:             Combined retrieval query.
+        chunks:            All fixed-time chunks for this session.
+        visited_indices:   Indices of chunks that have already been retrieved in this session.
+        force_progression: If True, bypass TF-IDF and return the next unvisited chronological chunk.
+        top_n:             Maximum number of base chunks to retrieve via TF-IDF.
 
     Returns:
         Tuple of (list[Chunk], confidence_str).
@@ -85,6 +91,23 @@ def find_relevant_chunks(
     """
     if not chunks:
         return [], "low_confidence"
+
+    if force_progression:
+        visited = set(visited_indices) if visited_indices else set()
+        for i, chunk in enumerate(chunks):
+            if i not in visited:
+                expanded = {i}
+                if i > 0:
+                    expanded.add(i - 1)
+                if i < len(chunks) - 1:
+                    expanded.add(i + 1)
+                
+                result = [chunks[idx] for idx in sorted(expanded)]
+                logger.info("[retrieval] progression | next_index=%d | expanded=%s", i, sorted(expanded))
+                return result, "progression"
+                
+        logger.info("[retrieval] exhausted | no unvisited chunks left for progression")
+        return [], "exhausted"
 
     if len(chunks) <= top_n:
         # Small video — return all chunks, no retrieval needed
@@ -117,7 +140,6 @@ def _tfidf_retrieve(
     corpus = [c["text"] for c in chunks]
 
     vectorizer = TfidfVectorizer(
-        strip_accents="unicode",
         lowercase=True,
         ngram_range=(1, 2),   # unigrams + bigrams for better phrase matching
         min_df=1,

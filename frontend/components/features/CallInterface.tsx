@@ -7,7 +7,7 @@
  *   CallInterface (this — coordinator only, no business logic)
  *     ├── CallHeaderMinimal  (timer, title, mute only)
  *     ├── split panel
- *     │     ├── MicStageLeft  (mic hero, halo, FluencyBooster)
+ *     │     ├── MicStageLeft  (mic hero, halo, user STT display)
  *     │     └── AiPanelRight  (AI avatar, status, SubtitleRail)
  *     ├── CallFooterControls (single end-call button)
  *     └── EndSessionModal    (confirmation dialog)
@@ -15,9 +15,6 @@
  * Voice-first rules enforced here:
  *   - No chat input / text composer
  *   - No auto-send of any text
- *   - FluencyBooster hints are visual-only (no sendPrompt)
- *   - silenceSeconds tracked to show/hide FluencyBooster
- *   - When user starts speaking, silenceSeconds resets → booster fades out
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -42,8 +39,7 @@ interface Props {
   mode?: 'video_chat' | 'beginner';
 }
 
-/** How many seconds of silence before FluencyBooster appears */
-const SILENCE_THRESHOLD = 8;
+
 
 export default function CallInterface({ videoUrl, videoId, sessionId: sessionIdProp, mode = 'video_chat' }: Props) {
   const router = useRouter();
@@ -55,6 +51,8 @@ export default function CallInterface({ videoUrl, videoId, sessionId: sessionIdP
     initError,
     messages,
     liveSubtitle,
+    liveUserSubtitle,
+    aiUnderstood,
     isMuted,
     speedRate,
     setSpeedRate,
@@ -63,66 +61,30 @@ export default function CallInterface({ videoUrl, videoId, sessionId: sessionIdP
     toggleMute,
     handleToggleMic,
     endSession,
-  } = useCallSession({ videoUrl, mode });
+  } = useCallSession({ videoUrl, mode, initialSessionId: sessionIdProp });
 
   const [showEndModal, setShowEndModal] = useState(false);
-
-  // ── Silence timer for FluencyBooster ─────────────────────────────────────
-  const [silenceSeconds, setSilenceSeconds] = useState(0);
-  const [boosterHiding, setBoosterHiding] = useState(false);
-  const silenceIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Count silence only when user is idle (not speaking, not AI turn)
-  useEffect(() => {
-    const isUserIdle =
-      sessionState === 'idle' && !isMuted;
-
-    if (isUserIdle) {
-      silenceIntervalRef.current = setInterval(() => {
-        setSilenceSeconds((s) => s + 1);
-      }, 1000);
-    } else {
-      // Reset silence timer when user or AI is active
-      if (silenceIntervalRef.current) {
-        clearInterval(silenceIntervalRef.current);
-        silenceIntervalRef.current = null;
-      }
-
-      // When user starts speaking → trigger booster fade-out then hide
-      if (sessionState === 'listening') {
-        if (silenceSeconds >= SILENCE_THRESHOLD) {
-          setBoosterHiding(true);
-          setTimeout(() => {
-            setSilenceSeconds(0);
-            setBoosterHiding(false);
-          }, 380); // match CSS animation duration
-        } else {
-          setSilenceSeconds(0);
-        }
-      }
-    }
-
-    return () => {
-      if (silenceIntervalRef.current) {
-        clearInterval(silenceIntervalRef.current);
-        silenceIntervalRef.current = null;
-      }
-    };
-  }, [sessionState, isMuted, silenceSeconds]);
 
   // ── Video title — never show raw URL ────────────────────────────────────
   const videoTitle = metadata?.title
     ?? (videoId ? `Video Session` : 'Đang tải…');
 
   // Friendly display title for header
-  const displayTitle = metadata?.title
-    ? `Đang học: ${metadata.title}`
-    : 'Video Session';
+  let displayTitle = 'Video Session';
+  if (sessionState === 'initializing') {
+    displayTitle = 'Đang chuẩn bị...';
+  } else if (metadata?.title) {
+    displayTitle = `Đang trò chuyện: ${metadata.title}`;
+  } else {
+    displayTitle = 'Đang trò chuyện';
+  }
 
   // ── Notifications ────────────────────────────────────────────────────────
+  const hasShownReadyToastRef = useRef(false);
   useEffect(() => {
-    if (sessionState === 'idle' && !initError) {
-      showToast('✨ Sẵn sàng! Nhấn mic để bắt đầu.', { type: 'success' });
+    if (sessionState === 'idle' && !initError && !hasShownReadyToastRef.current) {
+      hasShownReadyToastRef.current = true;
+      showToast('✨ Đã sẵn sàng trò chuyện! Nhấn mic để bắt đầu.', { type: 'success' });
     }
   }, [sessionState, initError]);
 
@@ -132,16 +94,12 @@ export default function CallInterface({ videoUrl, videoId, sessionId: sessionIdP
     }
   }, [initError]);
 
-  // ── Space bar → toggle mic ───────────────────────────────────────────────
+  // ── Keyboard shortcuts ───────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.code === 'Space' && document.activeElement?.tagName !== 'INPUT') {
+      if (e.code === 'Space' && !e.repeat && document.activeElement?.tagName !== 'INPUT') {
         e.preventDefault();
-        if (isMuted) {
-          showToast('Vui lòng bật lại micro ở góc màn hình để tiếp tục luyện nói', { type: 'error' });
-        } else {
-          handleToggleMic();
-        }
+        handleToggleMic();
       }
       if (e.key === 'Escape') setShowEndModal(false);
     };
@@ -156,19 +114,42 @@ export default function CallInterface({ videoUrl, videoId, sessionId: sessionIdP
     setTimeout(() => router.push('/'), 1200);
   }, [endSession, router]);
 
-  // ── Mic state for sub-components ─────────────────────────────────────────
-  const micState =
+  // micState drives both the visual appearance and disabled state of the mic button.
+  // 'listening' → user is actively speaking (recording or in silence window)
+  // 'locked'    → the full "Đang phản hồi…" phase (speech_processing + thinking + speaking)
+  //               mic is completely blocked — no accidental activation mid-response
+  // 'idle'      → ready to accept a new turn
+  const micState: 'idle' | 'listening' | 'muted' | 'locked' =
     isMuted ? 'muted'
-    : sessionState === 'listening' ? 'listening'
+    : ['listening', 'recording', 'turn_candidate_end'].includes(sessionState) ? 'listening'
+    : ['speech_processing', 'thinking', 'speaking'].includes(sessionState) ? 'locked'
     : 'idle';
+
+  let badgeText = 'ĐANG TRÒ CHUYỆN';
+  let badgeType: 'pending' | 'active' = 'active';
+
+  const hasUserInteracted = messages.some((m) => m.sender === 'user');
+
+  if (sessionState === 'initializing') {
+    badgeText = 'ĐANG CHUẨN BỊ';
+    badgeType = 'pending';
+  } else if (sessionState === 'idle' && !hasUserInteracted) {
+    badgeText = 'SẴN SÀNG';
+    badgeType = 'pending';
+  }
+
+  // Last user message
+  const lastUserMessage = [...messages].reverse().find((m) => m.sender === 'user')?.text;
 
   return (
     <div className={styles.shell}>
       {/* ── Header ── */}
       <CallHeaderMinimal
         timer={timer}
-        videoTitle={displayTitle}
+        videoTitle={videoTitle}
         micState={micState}
+        badgeText={badgeText}
+        badgeType={badgeType}
         onToggleMute={() => {
           toggleMute();
           showToast(isMuted ? '🎙️ Mic đã bật lại' : '🔇 Đã tắt mic', { duration: 2000 });
@@ -182,20 +163,15 @@ export default function CallInterface({ videoUrl, videoId, sessionId: sessionIdP
           mode={mode}
           micState={micState}
           sessionState={sessionState}
-          silenceSeconds={silenceSeconds}
-          silenceThreshold={SILENCE_THRESHOLD}
-          boosterHiding={boosterHiding}
+          liveUserSubtitle={liveUserSubtitle}
+          lastUserMessage={lastUserMessage}
+          aiUnderstood={aiUnderstood}
           onToggleMic={() => {
             if (isMuted) {
               showToast('Vui lòng bật lại micro ở góc màn hình để tiếp tục luyện nói', { type: 'error' });
             } else {
               handleToggleMic();
             }
-          }}
-          onHintClick={(_hint) => {
-            // Hint clicked — do NOT send text.
-            // The highlight UX is handled inside FluencyBooster itself.
-            // This callback intentionally does nothing (voice-first principle).
           }}
         />
 

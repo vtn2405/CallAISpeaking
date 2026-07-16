@@ -26,12 +26,22 @@ export default function SubtitleRail({ liveSubtitle, messages, isHidden = false 
   // Show live subtitle if present; else show last AI message as context
   const lastAiMessage = [...messages].reverse().find((m) => m.sender === 'ai');
 
-  const textStyle = isHidden ? { filter: 'blur(8px)', opacity: 0.4, transition: 'all 0.3s' } : { transition: 'all 0.3s' };
+  const getDynamicStyle = (text: string) => {
+    let fontSize = '16px';
+    if (text.length > 150) fontSize = '13px';
+    else if (text.length > 80) fontSize = '14px';
+
+    return {
+      ...(isHidden ? { filter: 'blur(8px)', opacity: 0.4 } : {}),
+      fontSize,
+      transition: 'all 0.3s'
+    };
+  };
 
   if (liveSubtitle) {
     return (
       <div className={styles.subtitleRail} aria-live="polite" aria-label="Subtitle đang phát">
-        <p className={`${styles.subtitleText} ${styles.subtitleLive}`} style={textStyle}>
+        <p className={`${styles.subtitleText} ${styles.subtitleLive}`} style={getDynamicStyle(liveSubtitle)}>
           {liveSubtitle}
         </p>
       </div>
@@ -41,7 +51,7 @@ export default function SubtitleRail({ liveSubtitle, messages, isHidden = false 
   if (lastAiMessage) {
     return (
       <div className={styles.subtitleRail} aria-label="Câu vừa nói">
-        <p className={styles.subtitleText} style={textStyle}>
+        <p className={styles.subtitleText} style={getDynamicStyle(lastAiMessage.text)}>
           {lastAiMessage.text}
         </p>
       </div>

@@ -1,14 +1,17 @@
 // ─── Session lifecycle ─────────────────────────────────────────────────────────
 export type CallSessionState =
-  | 'initializing' // Fetching video context / awaiting session.ready
-  | 'idle'         // Ready, waiting for user
-  | 'listening'    // Mic is hot, capturing audio
-  | 'thinking'     // Audio sent, waiting for AI
-  | 'speaking'     // AI is speaking
-  | 'ended';       // Session terminated
+  | 'initializing'      // Fetching video context / awaiting session.ready
+  | 'idle'              // Ready, waiting for user
+  | 'listening'         // Mic is hot, MediaRecorder is capturing chunks
+  | 'recording'         // Audio data is actively being recorded (can be same as listening)
+  | 'turn_candidate_end'// Short pause detected — waiting the commit window before finalising
+  | 'speech_processing' // Audio sent to Groq; awaiting normalized_english result
+  | 'thinking'          // normalized_english sent to Azure; awaiting LLM reply
+  | 'speaking'          // AI is speaking (Azure TTS playing)
+  | 'ended';            // Session terminated
 
 // ─── Mic state (internal to useVoiceClient) ───────────────────────────────────
-export type MicState = 'idle' | 'listening' | 'muted';
+export type MicState = 'idle' | 'listening' | 'muted' | 'locked';
 
 // ─── AI state (internal to useVoiceClient) ────────────────────────────────────
 export type AiState = 'idle' | 'thinking' | 'speaking';
@@ -36,7 +39,8 @@ export interface SessionInitResponse {
   status: 'processing' | 'ready';
   metadata: {
     title: string;
-    duration: number;       // seconds
+    channelName?: string;
+    duration?: number;       // seconds
     thumbnailUrl?: string;
   };
 }
@@ -98,3 +102,38 @@ export type PipecatRealtimeEvent =
   | AiSpeakingEvent
   | SessionEndedEvent
   | ErrorEvent;
+
+// ─── Speech Normalization result ──────────────────────────────────────────────
+/** Response from POST /api/stt/normalize (Provider-Agnostic Normalization Layer) */
+export interface SpeechNormalizationResult {
+  /** Near-verbatim audio as the STT provider heard it — canonical source for the UI ("Bạn nói"). */
+  verbatim_text: string;
+  /** Alias for verbatim_text — kept for backward compatibility. */
+  provider_text: string;
+  /** Clean, intent-preserving English string to feed the LLM turn engine. */
+  normalized_english: string;
+  source_language_mode: 'english' | 'mixed_vi_en' | 'mostly_vietnamese' | 'unknown';
+  mode_used: 'transcription' | 'translation' | 'transcription+translation';
+  normalization_status: 'ok' | 'fallback_used' | 'clarification_needed' | 'provider_error';
+  /** Which STT provider delivered the transcript (for migration debugging). */
+  provider_used: 'deepgram' | 'groq' | null;
+  /** Which translation provider was used, if any. */
+  translation_provider_used: 'groq_llm' | 'groq_whisper' | null;
+  /** Why a fallback was triggered, or null if primary path succeeded. */
+  fallback_reason: string | null;
+  notes: {
+    contains_code_switch: boolean;
+    contains_fillers_only: boolean;
+    contains_proper_noun: boolean;
+    needs_clarification: boolean;
+    /** True when verbatim_text !== normalized_english — UI shows "AI hiểu là" label. */
+    normalization_applied: boolean;
+    asr_correction_applied?: boolean;
+    turn_handling_mode?: string;
+    user_intent?: string;
+    embedded_phrase_source?: string;
+  };
+}
+
+/** @deprecated Use SpeechNormalizationResult instead. Will be removed after frontend rollout. */
+export type GroqNormalizationResult = SpeechNormalizationResult;

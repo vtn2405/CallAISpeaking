@@ -25,9 +25,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="vi" className={geist.variable}>
-      <body className="flex min-h-[100dvh] bg-offwhite text-zinc-900">
+      <body className="flex min-h-[100dvh] bg-bg text-ink">
         <Sidebar />
-        <div className="flex-1 ml-[220px] w-full min-w-0 flex flex-col">
+        <div className="flex-1 min-w-0 flex flex-col">
           {children}
         </div>
       </body>

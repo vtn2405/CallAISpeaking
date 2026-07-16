@@ -15,6 +15,17 @@
   overflow: hidden;
   font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
+  animation: shell-reveal 0.6s cubic-bezier(0.76, 0, 0.24, 1) forwards;
+}
+
+@keyframes shell-reveal {
+  from { clip-path: circle(0% at 50% 50%); }
+  to   { clip-path: circle(150vw at 50% 50%); }
+}
+
+@keyframes content-fade-in {
+  from { opacity: 0; transform: scale(0.95); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* ---------- Header ---------- */
@@ -28,6 +39,8 @@
   flex-shrink: 0;
   height: 60px;
   backdrop-filter: blur(12px);
+  opacity: 0;
+  animation: content-fade-in 0.4s cubic-bezier(0.2, 0, 0, 1) 0.3s forwards;
 }
 
 .headerLeft {
@@ -80,12 +93,23 @@
   border-radius: 999px;
 }
 
+.liveBadgePending {
+  color: #a4a097; /* stone */
+  background: rgba(164, 160, 151, 0.12);
+  border: 1px solid rgba(164, 160, 151, 0.2);
+}
+
 .liveDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
   background: #4ade80;
   animation: live-blink 1.2s infinite;
+}
+
+.liveDotPending {
+  background: #a4a097;
+  animation: live-blink 2s infinite;
 }
 
 @keyframes live-blink {
@@ -147,6 +171,8 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   overflow: hidden;
+  opacity: 0;
+  animation: content-fade-in 0.4s cubic-bezier(0.2, 0, 0, 1) 0.35s forwards;
 }
 
 /* ---------- LEFT PANEL — Mic stage ---------- */
@@ -186,68 +212,59 @@
   z-index: 1;
 }
 
-/* Halo rings */
+/* Diffused glow for Mic */
 .micHaloWrapper {
   position: relative;
-  width: 200px;
-  height: 200px;
+  width: 160px;
+  height: 160px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-.haloRing {
+.micHaloWrapper::before {
+  content: '';
   position: absolute;
+  inset: -20px;
   border-radius: 50%;
-  border: 1.5px solid rgba(99,102,241,.15);
-  animation: halo-idle 3s ease-in-out infinite;
+  background: radial-gradient(circle, rgba(99,102,241,0.2) 0%, transparent 70%);
+  animation: glow-idle 4s ease-in-out infinite alternate;
   pointer-events: none;
 }
-.haloRing:nth-child(1) { inset: 16px; animation-delay: 0s; }
-.haloRing:nth-child(2) { inset: 0; animation-delay: .7s; }
-.haloRing:nth-child(3) { inset: -16px; animation-delay: 1.4s; }
 
-@keyframes halo-idle {
-  0%,100% { opacity: .4; transform: scale(1); }
-  50%      { opacity: .12; transform: scale(1.03); }
+@keyframes glow-idle {
+  from { transform: scale(1); opacity: 0.5; }
+  to   { transform: scale(1.1); opacity: 0.8; }
 }
 
-/* Listening halos — more vivid */
-.micHaloWrapper.listening .haloRing {
-  border-color: rgba(99,102,241,.35);
-  animation: halo-listen 1.2s ease-in-out infinite;
-}
-.micHaloWrapper.listening .haloRing:nth-child(2) { animation-delay: .3s; }
-.micHaloWrapper.listening .haloRing:nth-child(3) { animation-delay: .6s; }
-
-@keyframes halo-listen {
-  0%   { transform: scale(1); opacity: .7; }
-  50%  { transform: scale(1.06); opacity: .2; }
-  100% { transform: scale(1); opacity: .7; }
+.micHaloWrapper.listening::before {
+  background: radial-gradient(circle, rgba(99,102,241,0.4) 0%, transparent 70%);
+  animation: glow-listen 1.5s ease-in-out infinite alternate;
 }
 
-/* Speaking halos — accent color */
-.micHaloWrapper.speaking .haloRing {
-  border-color: rgba(6,182,212,.4);
-  animation: halo-speak .6s ease-in-out infinite alternate;
-}
-.micHaloWrapper.speaking .haloRing:nth-child(2) { animation-delay: .15s; }
-.micHaloWrapper.speaking .haloRing:nth-child(3) { animation-delay: .3s; }
-
-@keyframes halo-speak {
-  from { transform: scale(1); opacity: .5; }
-  to   { transform: scale(1.08); opacity: .9; }
+@keyframes glow-listen {
+  from { transform: scale(1); opacity: 0.7; }
+  to   { transform: scale(1.2); opacity: 1; }
 }
 
-/* Thinking halos */
-.micHaloWrapper.thinking .haloRing {
-  border-color: rgba(251,191,36,.3);
-  animation: halo-think 1.8s ease-in-out infinite;
+.micHaloWrapper.speaking::before {
+  background: radial-gradient(circle, rgba(6,182,212,0.4) 0%, transparent 70%);
+  animation: glow-speak 0.8s ease-in-out infinite alternate;
 }
 
-@keyframes halo-think {
-  0%,100% { opacity: .6; transform: scale(1); }
-  50%      { opacity: .15; transform: scale(1.05); }
+@keyframes glow-speak {
+  from { transform: scale(1.05); opacity: 0.8; }
+  to   { transform: scale(1.25); opacity: 1; }
+}
+
+.micHaloWrapper.thinking::before {
+  background: radial-gradient(circle, rgba(251,191,36,0.3) 0%, transparent 70%);
+  animation: glow-think 2s ease-in-out infinite alternate;
+}
+
+@keyframes glow-think {
+  from { transform: scale(1); opacity: 0.6; }
+  to   { transform: scale(1.15); opacity: 0.9; }
 }
 
 /* Mic button */
@@ -321,11 +338,56 @@
 .micStatus.speaking  { color: #67e8f9; }
 .micStatus.thinking  { color: #fde68a; }
 
+/* User STT Box */
+.userSubtitleBox {
+  margin-top: 12px;
+  max-width: 340px;
+  text-align: center;
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(12px);
+  animation: fb-appear 0.4s ease both;
+  z-index: 2;
+}
+
+.userSubtitleLabel {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.3);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+
+.userSubtitleText {
+  font-size: 15px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.5;
+}
+
+.userSubtitleText.live {
+  color: rgba(255, 255, 255, 0.55);
+  font-style: italic;
+}
+
+.userSubtitleUnderstood {
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(103, 232, 249, 0.7);
+  font-style: italic;
+  line-height: 1.4;
+}
+
 /* Space hint */
 .spaceHint {
-  font-size: 11.5px;
-  color: rgba(255,255,255,.2);
-  letter-spacing: .05em;
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 0.15em;
   text-transform: uppercase;
 }
 
@@ -421,95 +483,80 @@
   pointer-events: none;
 }
 
-/* AI Avatar */
+/* AI Avatar (Organic Fluid Orb) */
 .aiAvatarWrapper {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.aiAvatarRings {
-  position: absolute;
   width: 160px;
   height: 160px;
-  border-radius: 50%;
 }
 
-.aiAvatarRing {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1.5px solid rgba(6,182,212,.12);
-  animation: ai-ring-idle 3.5s ease-in-out infinite;
-}
-.aiAvatarRing:nth-child(1) { inset: 0; }
-.aiAvatarRing:nth-child(2) { inset: -14px; animation-delay: .8s; }
-.aiAvatarRing:nth-child(3) { inset: -28px; animation-delay: 1.6s; }
-
-@keyframes ai-ring-idle {
-  0%,100% { opacity: .5; transform: scale(1); }
-  50%      { opacity: .1; transform: scale(1.04); }
-}
-
-/* Speaking rings are much more active */
-.aiAvatarWrapper.speaking .aiAvatarRing {
-  border-color: rgba(6,182,212,.35);
-  animation: ai-ring-speak .55s ease-in-out infinite alternate;
-}
-.aiAvatarWrapper.speaking .aiAvatarRing:nth-child(2) { animation-delay: .18s; }
-.aiAvatarWrapper.speaking .aiAvatarRing:nth-child(3) { animation-delay: .36s; }
-
-@keyframes ai-ring-speak {
-  from { transform: scale(1); opacity: .6; }
-  to   { transform: scale(1.09); opacity: 1; }
-}
-
-/* Thinking rings */
-.aiAvatarWrapper.thinking .aiAvatarRing {
-  border-color: rgba(251,191,36,.25);
-  animation: ai-ring-think 1.2s ease-in-out infinite;
-}
-
-@keyframes ai-ring-think {
-  0%,100% { opacity: .7; }
-  50%      { opacity: .15; }
-}
-
+/* Base Orb Layer - Slow continuous background motion */
 .aiAvatar {
+  position: absolute;
   width: 120px;
   height: 120px;
-  border-radius: 50%;
-  background: linear-gradient(145deg, #0e7490, #06b6d4);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 42px;
-  box-shadow:
-    0 16px 48px rgba(6,182,212,.35),
-    0 4px 12px rgba(0,0,0,.4);
-  position: relative;
+  border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%;
+  /* Default Idle color: faint neutral or very weak blue */
+  background: linear-gradient(135deg, rgba(148, 163, 184, 0.4), rgba(71, 85, 105, 0.6));
+  box-shadow: 0 0 20px rgba(148, 163, 184, 0.2);
+  transition: background 0.8s ease, box-shadow 0.8s ease;
   z-index: 2;
-  transition: box-shadow 300ms, transform 300ms;
   flex-shrink: 0;
 }
 
-.aiAvatarWrapper.speaking .aiAvatar {
-  animation: ai-avatar-speak .5s ease-in-out infinite alternate;
+/* Idle State: Charcoal grey/subtle breathing */
+.aiAvatarWrapper.idle .aiAvatar {
+  background: linear-gradient(135deg, #374151, #4b5563);
+  animation: orb-idle 4s ease-in-out infinite;
 }
 
-@keyframes ai-avatar-speak {
-  from { transform: scale(1); box-shadow: 0 16px 48px rgba(6,182,212,.35), 0 4px 12px rgba(0,0,0,.4); }
-  to   { transform: scale(1.04); box-shadow: 0 20px 60px rgba(6,182,212,.55), 0 4px 12px rgba(0,0,0,.4); }
+@keyframes orb-idle {
+  0%   { transform: scale(0.98); box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 45% 55% 50% 50% / 50%; }
+  50%  { transform: scale(1.02); box-shadow: 0 0 25px rgba(0,0,0,0.3); border-radius: 55% 45% 50% 50% / 50%; }
+  100% { transform: scale(0.98); box-shadow: 0 0 10px rgba(0,0,0,0.1); border-radius: 45% 55% 50% 50% / 50%; }
 }
 
+/* Listening State: Blue mixed with purple */
+.aiAvatarWrapper.listening .aiAvatar {
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  box-shadow: 0 0 30px rgba(99, 102, 241, 0.4);
+  animation: orb-listening 2.5s ease-in-out infinite;
+}
+
+@keyframes orb-listening {
+  0%   { transform: scale(1); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+  25%  { transform: scale(1.05); border-radius: 50% 50% 40% 60% / 60% 40% 50% 50%; }
+  50%  { transform: scale(1.02); border-radius: 60% 40% 50% 50% / 40% 60% 40% 60%; }
+  75%  { transform: scale(1.08); border-radius: 45% 55% 35% 65% / 55% 45% 65% 35%; }
+  100% { transform: scale(1); border-radius: 40% 60% 70% 30% / 40% 50% 60% 50%; }
+}
+
+/* Thinking State: Amber/Warm Yellow */
 .aiAvatarWrapper.thinking .aiAvatar {
-  animation: ai-avatar-think 1.6s ease-in-out infinite;
+  background: linear-gradient(135deg, #f59e0b, #fbbf24);
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.3);
+  animation: orb-thinking 6s linear infinite;
 }
 
-@keyframes ai-avatar-think {
-  0%,100% { opacity: 1; }
-  50%      { opacity: .75; }
+@keyframes orb-thinking {
+  0%   { transform: rotate(0deg) scale(0.98); border-radius: 30% 70% 50% 50% / 50% 50% 70% 30%; }
+  50%  { transform: rotate(180deg) scale(1.0); border-radius: 70% 30% 50% 50% / 50% 50% 30% 70%; }
+  100% { transform: rotate(360deg) scale(0.98); border-radius: 30% 70% 50% 50% / 50% 50% 70% 30%; }
+}
+
+/* Speaking State: Cyan/Turquoise */
+.aiAvatarWrapper.speaking .aiAvatar {
+  background: linear-gradient(135deg, #06b6d4, #2dd4bf);
+  animation: orb-speaking 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes orb-speaking {
+  0%   { transform: scale(1.0); border-radius: 50%; box-shadow: 0 0 30px rgba(6, 182, 212, 0.4); }
+  50%  { transform: scale(1.15); border-radius: 45% 55% 40% 60%; box-shadow: 0 0 70px rgba(6, 182, 212, 0.8); }
+  100% { transform: scale(1.0); border-radius: 50%; box-shadow: 0 0 30px rgba(6, 182, 212, 0.4); }
 }
 
 /* Connection status */
@@ -558,11 +605,14 @@
   font-weight: 500;
   color: rgba(255,255,255,.8);
   line-height: 1.55;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
   animation: subtitle-in .25s ease both;
+  max-height: 140px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.subtitleText::-webkit-scrollbar {
+  display: none;
 }
 
 @keyframes subtitle-in {
@@ -596,23 +646,22 @@
 .endCallBtn {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 12px 28px;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #dc2626, #ef4444);
-  border: none;
-  color: #fff;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(220, 38, 38, 0.15);
+  border: 1px solid rgba(220, 38, 38, 0.3);
+  color: #ef4444;
   cursor: pointer;
-  box-shadow: 0 4px 16px rgba(220,38,38,.35);
-  transition: transform 150ms, box-shadow 150ms;
-  font-family: inherit;
-  letter-spacing: .02em;
+  box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  transition: all 200ms ease;
 }
 .endCallBtn:hover {
+  background: rgba(220, 38, 38, 0.25);
   transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(220,38,38,.5);
+  box-shadow: 0 8px 24px rgba(220,38,38,.4);
+  color: #f87171;
 }
 .endCallBtn:active { transform: translateY(0); }
 

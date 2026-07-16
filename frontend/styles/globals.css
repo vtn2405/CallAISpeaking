@@ -2,17 +2,99 @@
 
 @theme {
   --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  
-  --color-zinc-850: #27272a;
-  --color-offwhite: #FBFBFA;
-  --color-primary-50: #eff4ff;
-  --color-primary-600: #1B4BA0;
-  --color-primary-700: #153c82;
+
+  /* ── Surfaces (Notion-warm canvas hierarchy) ── */
+  --color-canvas:        #FFFFFF;        /* primary surface: cards, inputs */
+  --color-surface:       #f4f3f0;        /* section bg, subtle fill */
+  --color-surface-soft:  #fafaf9;        /* quieter bg, mode picker */
+  --color-bg:            #f9f8f6;        /* page background: soft paper */
+
+  /* ── Borders (Notion hairline system) ── */
+  --color-hairline:       #e5e3df;       /* default 1px card border */
+  --color-hairline-soft:  #ede9e4;       /* quiet dividers */
+  --color-hairline-strong:#c8c4be;       /* input border */
+
+  /* ── Text (Notion warm ink scale) ── */
+  --color-ink:           #1a1a1a;        /* primary headlines + body */
+  --color-charcoal:      #37352f;        /* body emphasis */
+  --color-slate:         #5d5b54;        /* secondary text */
+  --color-steel:         #787671;        /* tertiary / muted */
+  --color-stone:         #a4a097;        /* placeholders */
+  --color-muted:         #bbb8b1;        /* disabled */
+
+  /* ── Primary CTA (desaturated blue, not SaaS-blue) ── */
+  --color-primary-50:    #EBF1FA;
+  --color-primary-100:   #D1E0F2;
+  --color-primary-600:   #315D9A;
+  --color-primary-700:   #25497A;
+
+  /* ── Success (readiness state) ── */
+  --color-success-soft:  #d9f3e1;        /* Notion mint tint */
+  --color-success-text:  #1aae39;        /* Notion brand-green */
+
+  /* ── Legacy aliases ── */
+  --color-zinc-850:      #27272a;
+  --color-offwhite:      #F4F4F2;
+  --color-text:          #1a1a1a;
+
+  /* ── Shape: Notion-sober geometry ── */
+  --radius-sm:  6px;
+  --radius-md:  8px;    /* buttons */
+  --radius-lg:  12px;   /* cards */
+  --radius-xl:  16px;
+  --radius-2xl: 20px;
+  --radius-full: 9999px;
 }
+
 
 /* Custom utilities that we might need */
 @layer utilities {
   .smooth-corner {
     border-radius: 1.5rem; /* rounded-3xl approx */
+  }
+
+  /* ── Toast Notifications ── */
+  .toast {
+    position: fixed;
+    bottom: 6rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(20px);
+    opacity: 0;
+    visibility: hidden;
+    background-color: var(--color-charcoal);
+    color: var(--color-canvas);
+    padding: 0.75rem 1.25rem;
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 9999;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    text-align: center;
+  }
+
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .toast.success {
+    background-color: rgba(26, 26, 26, 0.85); /* Dark minimalism */
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fff;
+    border: 1px solid rgba(26, 174, 57, 0.4);
+    box-shadow: 0 0 16px rgba(26, 174, 57, 0.2);
+  }
+
+  .toast.error {
+    background-color: rgba(26, 26, 26, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #fca5a5;
+    border: 1px solid rgba(220, 38, 38, 0.4);
+    box-shadow: 0 0 16px rgba(220, 38, 38, 0.2);
   }
 }

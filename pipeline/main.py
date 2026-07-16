@@ -33,6 +33,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from context import build_context, ContextPipelineError
 from session_store import store
 from ws_bridge import router as ws_router
+from stt import router as stt_router, legacy_router as stt_legacy_router
 
 load_dotenv()
 
@@ -55,6 +56,8 @@ app.add_middleware(
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(ws_router)
+app.include_router(stt_router)          # POST /api/stt/normalize — provider-agnostic
+app.include_router(stt_legacy_router)   # POST /api/stt/groq     — migration shim (keep until frontend rollout)
 
 
 # ── Health ────────────────────────────────────────────────────────────────────

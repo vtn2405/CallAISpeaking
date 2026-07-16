@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import styles from '@/styles/AudioControls.module.css';
 import VadVisualizer from '../VadVisualizer';
 import { MicState, AiState } from '@/types/call';
@@ -18,6 +19,13 @@ const MicIcon = () => (
 );
 
 export default function AudioControls({ micState, aiState, onToggleMic, onSendPrompt, onEndCall }: AudioControlsProps) {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsMobile(/iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
+    }
+  }, []);
   const micClass = [
     styles.micBtn,
     micState === 'listening' ? styles.recording : '',
@@ -27,6 +35,7 @@ export default function AudioControls({ micState, aiState, onToggleMic, onSendPr
   const micLabel =
     micState === 'listening' ? 'Đang lắng nghe…'
     : micState === 'muted'   ? 'Mic đang tắt'
+    : isMobile ? 'Nhấn để nói'
     : 'Giữ để nói (Space)';
 
   const orbStatus =

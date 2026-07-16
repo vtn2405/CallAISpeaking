@@ -2,6 +2,7 @@ fastapi>=0.111
 uvicorn[standard]>=0.29
 python-dotenv>=1.0
 httpx>=0.27              # async HTTP for Azure Speech token exchange
+python-multipart>=0.0.9  # multipart/form-data parsing for audio file uploads
 
 # Context pipeline
 youtube-transcript-api>=0.6.2
@@ -9,3 +10,4 @@ openai>=1.0.0            # Azure OpenAI (gpt-5-mini) — realtime turn generatio
 scikit-learn>=1.4.0      # TF-IDF retrieval
 google-genai>=2.10.0     # Gemini 2.5 Flash — ingest/outline only (not used per turn)
 pydantic>=2.0.0          # Typed outline schema validation
+groq>=0.9.0              # Groq Whisper — Speech Normalization Layer (STT + code-switch translation)

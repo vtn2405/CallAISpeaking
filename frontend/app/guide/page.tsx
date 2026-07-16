@@ -65,7 +65,7 @@ export default function GuidePage() {
             <div className="pt-2 pb-6">
               <h3 className="text-lg font-bold text-zinc-900 mb-2">2. Bắt đầu hội thoại</h3>
               <p className="text-[15px] text-zinc-500 leading-relaxed">
-                Sau khi AI phân tích video xong, hãy bấm nút Micro hoặc phím <kbd className="font-sans px-1.5 py-0.5 border border-zinc-200 rounded text-xs mx-1 bg-zinc-50 font-bold">Space</kbd> và nói xin chào bằng tiếng Anh.
+                Sau khi AI phân tích video xong, hãy bấm nút Micro (hoặc phím <kbd className="font-sans px-1.5 py-0.5 border border-zinc-200 rounded text-xs mx-1 bg-zinc-50 font-bold">Space</kbd>) để bắt đầu nói, sau đó bấm lại một lần nữa để kết thúc và chờ AI phản hồi.
               </p>
             </div>
           </div>
@@ -113,7 +113,7 @@ export default function GuidePage() {
             </li>
             <li className="flex gap-2.5">
               <span className="text-amber-500 font-bold mt-0.5">•</span>
-              <span>Nhấn phím <strong>Space</strong> để tạm dừng AI nếu bạn cần thời gian suy nghĩ.</span>
+              <span>Đừng quên nhấn lại nút Micro (hoặc phím <strong>Space</strong>) khi bạn đã nói xong để AI bắt đầu xử lý nhé.</span>
             </li>
           </ul>
         </section>

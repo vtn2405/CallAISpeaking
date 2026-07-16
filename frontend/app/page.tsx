@@ -3,73 +3,51 @@ import Toast from '@/components/ui/Toast';
 import YoutubeInput from '@/components/features/YoutubeInput';
 import LockedFeatureCards from '@/components/features/LockedFeatureCards';
 import RecentSessions from '@/components/features/RecentSessions';
-import { Lightning, Clock, CalendarCheck } from '@phosphor-icons/react/dist/ssr';
 
 export const metadata: Metadata = {
-  title: 'Dashboard',
+  title: 'AI Speaking Coach',
   description: 'Luyện speaking IELTS qua video YouTube với AI Speaking Coach.',
 };
 
 export default function DashboardPage() {
   return (
-    <main className="p-8 lg:p-12 xl:p-16 flex flex-col gap-10 max-w-6xl mx-auto w-full min-w-0">
-      {/* Topbar */}
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
-            Chào Minh 👋
-          </h1>
-          <div className="flex items-center gap-1.5 px-3 py-1 border border-orange-200 bg-orange-50 text-orange-600 font-bold text-sm rounded-full">
-            <Lightning weight="fill" size={16} />
-            <span>Chuỗi 12 ngày</span>
-          </div>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-4 py-1.5 bg-white border border-zinc-200 rounded-full text-sm font-semibold text-zinc-600 shadow-sm">
-            <Clock weight="bold" size={16} className="text-zinc-400" />
-            <span>48 phút tuần này</span>
-          </div>
-          <div className="flex items-center gap-1.5 px-4 py-1.5 bg-white border border-zinc-200 rounded-full text-sm font-semibold text-zinc-600 shadow-sm">
-            <CalendarCheck weight="bold" size={16} className="text-zinc-400" />
-            <span>7 buổi</span>
-          </div>
-        </div>
+    <main className="flex flex-col max-w-[640px] mx-auto w-full min-w-0 px-6 pt-12 pb-24 lg:pt-16">
+
+      {/* ── Greeting ── */}
+      <header className="mb-8">
+        <h1 className="text-[26px] font-semibold text-ink tracking-[-0.5px] leading-tight">
+          Trò chuyện với AI
+        </h1>
+        <p className="text-[15px] text-steel mt-2 leading-relaxed">
+          Dán link YouTube có phụ đề để AI chuẩn bị ngữ cảnh và bắt đầu nói chuyện cùng bạn.
+        </p>
       </header>
 
-      {/* Hero feature card — YouTube input */}
-      <section 
-        className="relative bg-white border border-zinc-200/60 rounded-3xl p-8 sm:p-10 shadow-[0_8px_30px_rgba(24,24,27,0.04)] overflow-hidden" 
-        aria-labelledby="hero-title"
-      >
-        {/* Subtle decorative mesh or gradient at the corner */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-[radial-gradient(ellipse_at_top_right,rgba(24,24,27,0.03)_0%,transparent_70%)] pointer-events-none" />
-        
-        <div className="relative z-10 mb-8">
-          <div className="mb-3">
-            <span className="text-[11px] font-extrabold tracking-widest text-zinc-400 uppercase">TÍNH NĂNG CHÍNH</span>
-          </div>
-          <h2 className="text-2xl font-extrabold text-zinc-900 tracking-tight mb-2" id="hero-title">
-            Trò chuyện qua video YouTube
-          </h2>
-          <p className="text-[15px] text-zinc-500 max-w-[65ch]">
-            Dán link YouTube có phụ đề để hệ thống AI tự động phân tích và bắt đầu luyện tập.
-          </p>
-        </div>
-
-        {/* Client boundary: interactive Youtube input */}
-        <div className="relative z-10">
-          <YoutubeInput />
-        </div>
+      {/* ── PRIMARY: Conversation Entry — sits directly on page, no outer card ── */}
+      <section aria-labelledby="entry-title" className="mb-5">
+        <h2 id="entry-title" className="sr-only">Nhập link YouTube</h2>
+        <YoutubeInput />
       </section>
 
-      {/* Bottom two-column grid (Bento Grid) */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-6 items-start">
-        <LockedFeatureCards />
+      {/* ── Divider ── */}
+      <div className="border-t border-hairline my-8" />
+
+      {/* ── TERTIARY: Recent sessions ── */}
+      <div className="mb-10">
         <RecentSessions />
       </div>
 
-      {/* Global toast */}
+      {/* ── LOW PRIORITY: Phase 2 locked features ── */}
+      <section aria-labelledby="coming-soon-label">
+        <p
+          id="coming-soon-label"
+          className="text-[11px] font-medium tracking-[0.08em] text-stone uppercase mb-3"
+        >
+          Tính năng sắp ra mắt
+        </p>
+        <LockedFeatureCards />
+      </section>
+
       <Toast />
     </main>
   );

@@ -31,11 +31,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import time
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from event_emitter import send_error, send_session_ended, send_session_ready
-from ai_turn import run_turn, send_turn_final
+from ai_turn import run_turn, run_turn_streaming, send_turn_final
 from session_store import SessionStatus, TransitionError, store
 
 logger = logging.getLogger(__name__)
@@ -49,6 +51,7 @@ _pending_reply: dict[str, str] = {}
 @router.websocket("/ws/sessions/{session_id}")
 async def ws_session(ws: WebSocket, session_id: str) -> None:
     await ws.accept()
+    logger.info("[gstack] session accepted for %s", session_id)
 
     # ── 1. Validate session ───────────────────────────────────────────────────
     record = await store.get(session_id)
@@ -78,6 +81,9 @@ async def ws_session(ws: WebSocket, session_id: str) -> None:
     # ── 3. Send session.ready (only now — not on HTTP init) ───────────────────
     await send_session_ready(ws, session_id, record.metadata)
     logger.info("session.ready sent for %s", session_id)
+    logger.info("[gstack] session.ready sent for %s", session_id)
+
+    first_frame_received = False
 
     # ── 4. Receive loop ───────────────────────────────────────────────────────
     try:
@@ -86,6 +92,9 @@ async def ws_session(ws: WebSocket, session_id: str) -> None:
 
             try:
                 frame = json.loads(raw)
+                if not first_frame_received:
+                    logger.info("[gstack] first client frame received after ready for %s: %s", session_id, frame.get("type"))
+                    first_frame_received = True
             except json.JSONDecodeError:
                 await send_error(ws, "Malformed JSON frame", code="BAD_FRAME")
                 continue
@@ -97,6 +106,11 @@ async def ws_session(ws: WebSocket, session_id: str) -> None:
                 if not user_text:
                     await send_error(ws, "Empty user turn", code="EMPTY_TURN")
                     continue
+
+                # meta carries code-switch signals from the frontend STT layer.
+                # It is intentionally kept separate from user_text so it never
+                # enters TF-IDF retrieval or the session history.
+                meta: dict = frame.get("meta") or {}
 
                 # Auto-commit previous turn on barge-in (user interrupted the AI)
                 if session_id in _pending_reply:
@@ -112,9 +126,18 @@ async def ws_session(ws: WebSocket, session_id: str) -> None:
                     except TransitionError:
                         pass  # already ACTIVE from a previous turn — fine
 
-                # run_turn emits: ai.thinking → ai.speaking + transcript.update(isFinal=False)
-                # It also returns the reply text which we store for tts.done.
-                reply = await run_turn(ws, session_id, user_text)
+                # run_turn / run_turn_streaming:
+                #   emits ai.thinking → ai.speaking + transcript.update(isFinal=False)
+                #   returns full reply text for tts.done.
+                # LLM_STREAMING_ENABLED=false  → fallback to unary (safe rollback).
+                t0_stt_done = time.perf_counter()  # timestamp right after STT, for telemetry
+                _streaming = os.getenv("LLM_STREAMING_ENABLED", "true").lower() == "true"
+                if _streaming:
+                    reply = await run_turn_streaming(
+                        ws, session_id, user_text, meta=meta, t0_stt_done=t0_stt_done
+                    )
+                else:
+                    reply = await run_turn(ws, session_id, user_text, meta=meta)
                 if reply:
                     _pending_reply[session_id] = reply
 
@@ -142,8 +165,9 @@ async def ws_session(ws: WebSocket, session_id: str) -> None:
                     code="UNKNOWN_FRAME_TYPE",
                 )
 
-    except WebSocketDisconnect:
+    except WebSocketDisconnect as e:
         logger.info("Client disconnected from session %s", session_id)
+        logger.info("[gstack] disconnect code/reason: code=%s, reason=%s", e.code, e.reason)
 
     except Exception as exc:  # noqa: BLE001
         exc_msg = repr(exc) or "Internal server error"

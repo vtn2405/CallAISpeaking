@@ -46,6 +46,7 @@ Captions may lack proper punctuation, capitalization, or have occasional transcr
 Your task: Analyze the transcript thoroughly and return a JSON object that matches exactly this schema:
 
 {
+  "title": "<A natural language, 4-10 word title. MUST be a specific topic/situation. NO technical brackets. NO marketing hype ('Amazing', 'Ultimate'). MUST read like a real lesson or speaking session.>",
   "summary_text": "<A clear, 3–5 sentence paragraph summarizing the full video topic and main message>",
   "parts": [
     { "part": 1, "title": "<part title>", "start_time": "MM:SS", "end_time": "MM:SS", "summary_text": "<what happens in this part>" }

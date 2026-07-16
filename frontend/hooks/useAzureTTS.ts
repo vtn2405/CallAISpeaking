@@ -39,6 +39,15 @@ interface UseAzureTTSOptions {
   backendBaseUrl?: string;
   /** Called when TTS audio finishes naturally (not on manual stop). */
   onEnd?: (text: string) => void;
+  /**
+   * Called for each word boundary event during synthesis.
+   * audioOffset: position in audio stream (100-nanosecond units)
+   * textOffset:  character offset of the word in the original text
+   * wordLength:  character length of the word
+   * word:        the word text
+   * Use this to drive per-word subtitle highlighting.
+   */
+  onWordBoundary?: (audioOffset: number, textOffset: number, wordLength: number, word: string) => void;
 }
 
 interface UseAzureTTSReturn {
@@ -97,23 +106,45 @@ export function useAzureTTS({
   voiceName = 'en-US-JennyNeural',
   backendBaseUrl,
   onEnd,
+  onWordBoundary,
 }: UseAzureTTSOptions = {}): UseAzureTTSReturn {
+  const lastTextRef      = useRef<string>('');
+  const playbackTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const endPlaybackRef     = useRef<() => void>(() => {});
+  const trueStartTimeRef   = useRef<number>(0);
+
   const [isSpeaking, setIsSpeaking]     = useState(false);
   const [isUnavailable, setIsUnavailable] = useState(false);
 
   // SDK + synthesizer refs — stable across renders
+  // Note: typed as `any` to avoid TS's protected-constructor InstanceType constraint
+  // that the Speech SDK types trigger. Runtime safety is preserved by the init guard.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sdkRef           = useRef<SpeechSDKModule | null>(null);
-  const synthesizerRef   = useRef<InstanceType<SpeechSDKModule['SpeechSynthesizer']> | null>(null);
-  const configRef        = useRef<InstanceType<SpeechSDKModule['SpeechConfig']> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const synthesizerRef   = useRef<any>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const configRef        = useRef<any>(null);
   // Keep audioConfig ref so we can explicitly close it on unmount and free the hardware lock.
   // Without this, the browser audio context stays locked between SPA navigations,
   // causing silence on the 2nd (and subsequent) sessions.
-  const audioConfigRef   = useRef<InstanceType<SpeechSDKModule['AudioConfig']> | null>(null);
-  const lastTextRef      = useRef<string>('');
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const audioConfigRef   = useRef<any>(null);
 
-  // Stable onEnd ref
-  const onEndRef = useRef(onEnd);
-  useEffect(() => { onEndRef.current = onEnd; }, [onEnd]);
+  // Stable onEnd + onWordBoundary refs
+  const onEndRef          = useRef(onEnd);
+  const onWordBoundaryRef = useRef(onWordBoundary);
+  useEffect(() => { onEndRef.current          = onEnd; },          [onEnd]);
+  useEffect(() => { onWordBoundaryRef.current = onWordBoundary; }, [onWordBoundary]);
+
+  endPlaybackRef.current = () => {
+    setIsSpeaking(false);
+    onEndRef.current?.(lastTextRef.current);
+    if (playbackTimeoutRef.current) {
+      clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+  };
 
   // Derive backend HTTP base URL from NEXT_PUBLIC_PIPECAT_WS_URL.
   // The WS URL may include a path like ws://localhost:8000/ws/sessions
@@ -166,10 +197,27 @@ export function useAzureTTS({
       configRef.current = speechConfig;
 
       // 4. Create synthesizer to play through browser's default speaker.
-      // Store audioConfig in a ref so we can close it on unmount (releases audio hardware lock).
-      const audioConfig = sdk.AudioConfig.fromDefaultSpeakerOutput();
+      // We use SpeakerAudioDestination to hook into the TRUE native Web Audio playback events.
+      const player = new sdk.SpeakerAudioDestination();
+      player.onAudioEnd = () => {
+        // This fires when the Web Audio node finishes playing, but is notoriously unreliable in MSE.
+        // We leave it here as a fastest-path fallback, but rely on audioDuration math below.
+        endPlaybackRef.current();
+      };
+
+      const audioConfig = sdk.AudioConfig.fromSpeakerOutput(player);
       audioConfigRef.current = audioConfig;
       const synthesizer = new sdk.SpeechSynthesizer(speechConfig, audioConfig);
+
+      // Wire word boundary events for subtitle highlighting and exact playback timing
+      synthesizer.wordBoundary = (_s: unknown, e: { audioOffset: number; textOffset: number; wordLength: number; text: string }) => {
+        if (trueStartTimeRef.current === 0) {
+          // e.audioOffset is in ticks (100ns). e.g. 15000000 = 1500ms
+          trueStartTimeRef.current = Date.now() - (e.audioOffset / 10000);
+        }
+        onWordBoundaryRef.current?.(e.audioOffset, e.textOffset, e.wordLength, e.text);
+      };
+
       synthesizerRef.current = synthesizer;
     };
 
@@ -180,6 +228,10 @@ export function useAzureTTS({
       // Close synthesizer first, then AudioConfig.
       // Closing both is required to fully release the browser's audio hardware lock.
       // If AudioConfig is not closed, the next session will initialize but produce silence.
+      if (playbackTimeoutRef.current) {
+        clearTimeout(playbackTimeoutRef.current);
+        playbackTimeoutRef.current = null;
+      }
       if (synthesizerRef.current) {
         try { synthesizerRef.current.close(); } catch { /* ignore */ }
         synthesizerRef.current = null;
@@ -206,7 +258,13 @@ export function useAzureTTS({
       return;
     }
 
+    if (playbackTimeoutRef.current) {
+      clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+
     lastTextRef.current = text;
+    trueStartTimeRef.current = 0; // Reset exact playback timer
     setIsSpeaking(true);
 
     const escapeXml = (unsafe: string) => {
@@ -231,36 +289,61 @@ export function useAzureTTS({
       </voice>
     </speak>`;
 
+    const startTime = Date.now();
+
     synthesizerRef.current.speakSsmlAsync(
       ssml,
-      (result) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (result: any) => {
         const sdk = sdkRef.current!;
         if (result.reason === sdk.ResultReason.SynthesizingAudioCompleted) {
-          setIsSpeaking(false);
-          onEndRef.current?.(lastTextRef.current);
+          // Synthesis is done. SpeakerAudioDestination.onAudioEnd is highly unreliable in browsers.
+          // Instead, we mathematically calculate the EXACT end time based on Azure's audioDuration ticks!
+          const audioDurationMs = result.audioDuration / 10000;
+          let timeRemaining = audioDurationMs;
+          
+          if (trueStartTimeRef.current > 0) {
+            const expectedEndTime = trueStartTimeRef.current + audioDurationMs;
+            timeRemaining = expectedEndTime - Date.now();
+          }
+
+          if (timeRemaining < 0) timeRemaining = 0;
+          
+          if (!playbackTimeoutRef.current) {
+            playbackTimeoutRef.current = setTimeout(() => {
+              endPlaybackRef.current();
+            }, timeRemaining + 150); // 150ms buffer for browser audio buffer flush
+          }
         } else {
           // Cancelled or error
           console.warn('[useAzureTTS] synthesis incomplete, reason:', result.reason);
-          setIsSpeaking(false);
+          endPlaybackRef.current();
         }
       },
-      (error) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (error: any) => {
         console.error('[useAzureTTS] speakSsmlAsync error:', error);
-        setIsSpeaking(false);
+        endPlaybackRef.current();
       },
     );
   }, [voiceName]);
 
-  // ── stop (barge-in) ───────────────────────────────────────────────────────
+  // ── stop (barge-in) ───────────────────────────────────────────────────────────────────
   const stop = useCallback(() => {
+    endPlaybackRef.current();
     if (!synthesizerRef.current) return;
     try {
-      synthesizerRef.current.stopSpeakingAsync(
-        () => { setIsSpeaking(false); },
-        (err) => { console.warn('[useAzureTTS] stopSpeakingAsync error:', err); setIsSpeaking(false); },
-      );
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const s = synthesizerRef.current as any;
+      if (typeof s.stopSpeakingAsync === 'function') {
+        s.stopSpeakingAsync(
+          () => { /* handled by endPlaybackRef */ },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (err: any) => { console.warn('[useAzureTTS] stopSpeakingAsync error:', err); }
+        );
+      }
     } catch {
-      setIsSpeaking(false);
+      // ignore
     }
   }, []);
 

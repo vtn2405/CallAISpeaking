@@ -2,19 +2,18 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { initSession } from '@/lib/sessionApi';
 import { showToast } from '@/components/ui/Toast';
 import { motion, AnimatePresence } from 'motion/react';
-import * as Popover from '@radix-ui/react-popover';
 import { 
   ClipboardText, 
   Check, 
-  Faders, 
   PlayCircle, 
   VideoCamera, 
   UserPlus, 
-  Info,
   YoutubeLogo,
-  X
+  X,
+  BellRinging
 } from '@phosphor-icons/react';
 
 const STEPS = [
@@ -45,6 +44,11 @@ function delay(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+const MODES: { id: ChatMode; label: string; desc: string; icon: typeof VideoCamera }[] = [
+  { id: 'video_chat', label: 'Tự nhiên', desc: '1.0x, phản hồi nhanh', icon: VideoCamera },
+  { id: 'beginner',   label: 'Người mới', desc: '0.8x, có gợi ý từ', icon: UserPlus },
+];
+
 export default function YoutubeInput() {
   const router = useRouter();
   const [url, setUrl] = useState('');
@@ -53,9 +57,11 @@ export default function YoutubeInput() {
   const [stepStatuses, setStepStatuses] = useState<Record<StepKey, StepStatus>>({
     transcript: 'idle', chunk: 'idle', summary: 'idle', ready: 'idle',
   });
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+  const [isTransitioning, setIsTransitioning] = useState(false);
   const [currentTitle, setCurrentTitle] = useState('');
   const [currentSub, setCurrentSub] = useState('');
-  
   const [pasted, setPasted] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef(false);
@@ -64,11 +70,11 @@ export default function YoutubeInput() {
     const trimmed = url.trim();
     if (!trimmed) {
       inputRef.current?.focus();
-      showToast('⚠️ Vui lòng dán link YouTube trước.', { type: 'error' });
+      setErrorMsg('Vui lòng dán link YouTube trước.');
       return;
     }
     if (!isValidYouTubeUrl(trimmed)) {
-      showToast('❌ Link không hợp lệ. Vui lòng dán đúng link YouTube.', { type: 'error' });
+      setErrorMsg('Link không hợp lệ. Vui lòng dán đúng link YouTube.');
       return;
     }
 
@@ -76,29 +82,57 @@ export default function YoutubeInput() {
     setProcessing(true);
 
     try {
-      for (let i = 0; i < STEPS.length; i++) {
-        if (abortRef.current) break;
-        const step = STEPS[i];
-
-        if (i > 0) {
-          const prevKey = STEPS[i - 1].key;
-          setStepStatuses((s) => ({ ...s, [prevKey]: 'done' }));
-        }
-        setStepStatuses((s) => ({ ...s, [step.key]: 'active' }));
-        setCurrentTitle(step.title);
-        setCurrentSub(step.sub);
-
-        await delay(step.ms);
+      // 1. Verify video validity first (just checks if video exists via oembed)
+      const verifyRes = await fetch('/api/videos/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ videoUrl: trimmed }),
+      });
+      
+      if (!verifyRes.ok) {
+        setProcessing(false);
+        const data = await verifyRes.json().catch(() => ({}));
+        setErrorMsg(data.error || 'Video không hợp lệ hoặc không tìm thấy.');
+        return;
       }
+
+      // 2. Run the fake steps animation in parallel with the actual API call
+      // to keep the UI active
+      const stepsPromise = (async () => {
+        for (let i = 0; i < STEPS.length; i++) {
+          if (abortRef.current) break;
+          setCurrentStepIndex(i);
+          const step = STEPS[i];
+          if (i > 0) setStepStatuses((s) => ({ ...s, [STEPS[i - 1].key]: 'done' }));
+          setStepStatuses((s) => ({ ...s, [step.key]: 'active' }));
+          setCurrentTitle(step.title);
+          setCurrentSub(step.sub);
+          await delay(step.ms);
+        }
+      })();
+
+      const initPromise = initSession(trimmed, mode);
+
+      const [res] = await Promise.all([initPromise, stepsPromise]);
 
       if (!abortRef.current) {
+        setIsTransitioning(true);
+        await delay(500); // Give time for the zoom-in transition
         const ytId = extractYouTubeId(trimmed) ?? '';
-        router.push(`/call?url=${encodeURIComponent(trimmed)}&vid=${ytId}&mode=${mode}`);
+        
+        // Save metadata temporarily in sessionStorage
+        if (typeof window !== 'undefined' && res.metadata) {
+          sessionStorage.setItem(`meta-${res.sessionId}`, JSON.stringify(res.metadata));
+        }
+
+        router.push(`/call?url=${encodeURIComponent(trimmed)}&vid=${ytId}&mode=${mode}&sessionId=${res.sessionId}`);
       }
-    } catch {
-      showToast('❌ Có lỗi xảy ra. Vui lòng thử lại.', { type: 'error' });
+    } catch (err: any) {
+      abortRef.current = true;
       setProcessing(false);
       setStepStatuses({ transcript: 'idle', chunk: 'idle', summary: 'idle', ready: 'idle' });
+      
+      setErrorMsg('Video không hợp lệ hoặc không có phụ đề (CC). Vui lòng thử video khác.');
     }
   }, [url, mode, router]);
 
@@ -114,163 +148,150 @@ export default function YoutubeInput() {
         setPasted(true);
         setTimeout(() => setPasted(false), 1500);
       }
-    } catch (err) {
-      console.error('Failed to read clipboard contents: ', err);
+    } catch {
       showToast('❌ Không thể truy cập clipboard.', { type: 'error' });
     }
   };
 
+  /* ── Processing State ── */
+  let pulseDuration = 1.6;
+  if (currentStepIndex === 1) pulseDuration = 0.9;
+  if (currentStepIndex >= 2) pulseDuration = 0.3;
+
   if (processing) {
     return (
-      <div className="flex flex-col items-center gap-6 py-6" role="status" aria-live="polite">
-        <div className="relative w-20 h-20 flex items-center justify-center">
+      <motion.div 
+        className="flex flex-col items-center gap-6 py-10" role="status" aria-live="polite"
+        animate={isTransitioning ? { opacity: 0, scale: 0.96 } : { opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+      >
+        <div className="relative w-16 h-16 flex items-center justify-center">
           <motion.div
-            className="absolute inset-0 rounded-full border-2 border-zinc-200"
-            animate={{ scale: [1, 1.2], opacity: [1, 0] }}
-            transition={{ repeat: Infinity, duration: 1.5, ease: "easeOut" }}
+            className="absolute inset-0 rounded-full border border-hairline"
+            animate={{ scale: [1, 1.4], opacity: [0.8, 0] }}
+            transition={{ repeat: Infinity, duration: pulseDuration, ease: 'easeOut' }}
           />
-          <YoutubeLogo weight="duotone" size={36} className="text-zinc-800 z-10" />
+          <YoutubeLogo weight="duotone" size={28} className="text-charcoal z-10" />
         </div>
-        <div className="text-center">
-          <h3 className="text-lg font-bold text-zinc-900">{currentTitle}</h3>
-          <p className="text-sm text-zinc-500 mt-1">{currentSub}</p>
+        <div className="text-center relative z-10">
+          <p className="text-[15px] font-medium text-ink">{currentTitle}</p>
+          <p className="text-[13px] text-steel mt-1">{currentSub}</p>
         </div>
-        <div className="flex flex-wrap justify-center gap-6 mt-2">
-          {STEPS.map((step) => {
-            const status = stepStatuses[step.key];
-            return (
-              <div key={step.key} className={`flex items-center gap-2 text-sm transition-colors duration-300 ${status === 'active' ? 'text-zinc-900 font-semibold' : status === 'done' ? 'text-emerald-600 font-semibold' : 'text-zinc-400'}`}>
-                <div className="relative flex items-center justify-center w-5 h-5">
-                  {status === 'done' ? (
-                    <Check weight="bold" size={16} />
-                  ) : (
-                    <div className={`w-2.5 h-2.5 rounded-full ${status === 'active' ? 'bg-zinc-900' : 'bg-zinc-300'}`} />
-                  )}
-                  {status === 'active' && (
-                    <motion.div
-                      className="absolute inset-0 border border-zinc-900 rounded-full"
-                      animate={{ scale: [1, 1.5], opacity: [1, 0] }}
-                      transition={{ repeat: Infinity, duration: 1 }}
-                    />
-                  )}
-                </div>
-                {step.label}
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      </motion.div>
     );
   }
 
+  /* ── Entry Form ── */
   return (
-    <div className="flex flex-col gap-5">
-      {/* Input Group */}
-      <div className="flex flex-col sm:flex-row gap-3 min-w-0">
-        <div className="relative flex-1 min-w-0 group">
-          <div className="absolute inset-y-0 left-0 flex items-center pl-4 pointer-events-none">
-            <YoutubeLogo size={20} className="text-zinc-400 group-focus-within:text-zinc-800 transition-colors" />
-          </div>
-          <input
-            ref={inputRef}
-            type="url"
-            className="w-full h-14 pl-12 pr-28 bg-zinc-50 border-2 border-zinc-200 rounded-2xl text-zinc-900 placeholder:text-zinc-400 outline-none transition-colors duration-300 focus:bg-white focus:border-zinc-800"
-            placeholder="https://www.youtube.com/watch?v=..."
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            onKeyDown={handleKeyDown}
-            autoComplete="off"
-            spellCheck={false}
-          />
-          {url && (
-            <button
-              type="button"
-              className="absolute inset-y-0 right-14 flex items-center px-2 text-zinc-400 hover:text-zinc-800 transition-colors"
-              onClick={() => { setUrl(''); inputRef.current?.focus(); }}
-              aria-label="Xóa URL"
-            >
-              <X size={18} weight="bold" />
-            </button>
-          )}
-          
-          <div className="absolute inset-y-0 right-1.5 flex items-center">
-            <motion.button
-              whileTap={{ scale: 0.95 }}
-              onClick={handlePaste}
-              className="flex items-center gap-1.5 h-11 px-3.5 bg-white border border-zinc-200 rounded-xl text-sm font-semibold text-zinc-700 shadow-sm hover:border-zinc-300 hover:bg-zinc-50 transition-colors"
-              aria-label="Dán từ bộ nhớ tạm"
-            >
-              {pasted ? <Check size={16} weight="bold" className="text-emerald-600" /> : <ClipboardText size={16} weight="bold" />}
-              <span>Dán</span>
-            </motion.button>
-          </div>
+    <div className="flex flex-col gap-4">
+
+      {/* URL Input */}
+      <div className="relative group">
+        <div className="absolute inset-y-0 left-0 flex items-center pl-3.5 pointer-events-none">
+          <YoutubeLogo size={18} className="text-stone group-focus-within:text-charcoal transition-colors" />
         </div>
-
-
+        <input
+          ref={inputRef}
+          type="url"
+          className="w-full h-11 pl-10 pr-[100px] bg-canvas border border-hairline-strong rounded-[8px] text-ink placeholder:text-stone text-[14px] outline-none transition-all duration-200 focus:border-primary-600 focus:ring-2 focus:ring-primary-50"
+          placeholder="Dán link YouTube có phụ đề vào đây…"
+          value={url}
+          onChange={(e) => { setUrl(e.target.value); setErrorMsg(null); }}
+          onKeyDown={handleKeyDown}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        {url && (
+          <button
+            type="button"
+            className="absolute inset-y-0 right-[68px] flex items-center px-2 text-stone hover:text-charcoal transition-colors"
+            onClick={() => { setUrl(''); inputRef.current?.focus(); }}
+            aria-label="Xóa URL"
+          >
+            <X size={15} weight="bold" />
+          </button>
+        )}
+        <div className="absolute inset-y-0 right-1.5 flex items-center">
+          <motion.button
+            whileTap={{ scale: 0.96 }}
+            onClick={handlePaste}
+            className="flex items-center gap-1 h-8 px-2.5 bg-surface border border-hairline rounded-[6px] text-[12px] font-medium text-charcoal hover:bg-hairline-soft transition-colors"
+            aria-label="Dán từ bộ nhớ tạm"
+          >
+            {pasted ? <Check size={13} weight="bold" className="text-success-text" /> : <ClipboardText size={13} weight="regular" />}
+            <span>Dán</span>
+          </motion.button>
+        </div>
       </div>
 
-      {/* Bento Switch for Modes */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-1.5 bg-zinc-100/80 rounded-3xl">
-        {[
-          {
-            id: 'video_chat' as ChatMode,
-            title: 'Tự nhiên',
-            desc: 'Hội thoại tự nhiên 1.0x, phản hồi nhanh.',
-            icon: VideoCamera
-          },
-          {
-            id: 'beginner' as ChatMode,
-            title: 'Người mới',
-            desc: 'Tốc độ 0.8x, có gợi ý từ và giải thích.',
-            icon: UserPlus
-          }
-        ].map((item) => {
+      <AnimatePresence>
+        {errorMsg && (
+          <motion.div
+            initial={{ opacity: 0, height: 0, y: -10 }}
+            animate={{ opacity: 1, height: 'auto', y: 0 }}
+            exit={{ opacity: 0, height: 0, y: -10 }}
+            className="overflow-hidden"
+          >
+            <div className="flex items-start gap-2.5 mt-0.5 px-4 py-3 bg-rose-50/90 backdrop-blur-md border border-rose-100 rounded-[8px]">
+              <div className="mt-0.5 shrink-0">
+                <BellRinging size={16} className="text-rose-500" weight="regular" />
+              </div>
+              <span className="text-[13px] text-rose-950 font-medium leading-relaxed">{errorMsg}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Mode Picker — pill-tab style */}
+      <div className="flex items-center gap-1 p-1 bg-surface rounded-[8px] border border-hairline w-fit">
+        {MODES.map((item) => {
           const isActive = mode === item.id;
           const Icon = item.icon;
           return (
             <button
               key={item.id}
               onClick={() => setMode(item.id)}
-              className="relative flex flex-col items-start p-4 rounded-2xl text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-800 group"
+              className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
             >
               {isActive && (
                 <motion.div
-                  layoutId="mode-switch-active"
-                  className="absolute inset-0 bg-white rounded-2xl shadow-[0_2px_12px_rgba(0,0,0,0.06)] border border-zinc-200/50"
-                  transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+                  layoutId="mode-pill-active"
+                  className="absolute inset-0 bg-canvas rounded-[6px] border border-hairline"
+                  transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
                 />
               )}
-              <div className="relative z-10 flex items-center gap-3 mb-1.5">
-                <div className={`flex items-center justify-center w-8 h-8 rounded-xl transition-colors duration-300 ${isActive ? 'bg-primary-50 text-primary-600' : 'bg-zinc-200 text-zinc-500 group-hover:bg-zinc-300'}`}>
-                  <Icon size={16} weight={isActive ? "fill" : "bold"} />
-                </div>
-                <span className={`font-bold transition-colors duration-300 ${isActive ? 'text-zinc-900' : 'text-zinc-600 group-hover:text-zinc-900'}`}>
-                  {item.title}
-                </span>
-              </div>
-              <span className={`relative z-10 text-[13px] leading-relaxed transition-colors duration-300 ${isActive ? 'text-zinc-600' : 'text-zinc-500'}`}>
-                {item.desc}
+              <span className={`relative z-10 transition-colors duration-150 ${isActive ? 'text-charcoal' : 'text-steel'}`}>
+                <Icon size={13} weight={isActive ? 'fill' : 'regular'} />
+              </span>
+              <span className={`relative z-10 font-medium transition-colors duration-150 ${isActive ? 'text-charcoal' : 'text-steel'}`}>
+                {item.label}
               </span>
             </button>
           );
         })}
       </div>
 
-      {/* Action Button */}
-      <div className="flex flex-col sm:flex-row items-center gap-4 mt-2">
-        <motion.button
-          whileTap={{ scale: 0.98 }}
-          onClick={handleSubmit}
-          className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 h-14 bg-primary-600 text-white rounded-2xl font-bold hover:bg-primary-700 transition-colors shadow-[0_4px_16px_rgba(27,75,160,0.3)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-600"
-        >
-          <PlayCircle size={22} weight="fill" />
-          <span>Bắt đầu hội thoại</span>
-        </motion.button>
-        <p className="flex items-center gap-2 text-sm text-zinc-500">
-          <Info size={16} weight="bold" />
-          AI sẽ tự động tạo ngữ cảnh từ transcript.
-        </p>
-      </div>
+      {/* Mode description */}
+      <p className="text-[12px] text-stone leading-relaxed -mt-1">
+        {mode === 'video_chat'
+          ? 'Hội thoại tự nhiên 1.0x, AI phản hồi nhanh và bám sát video.'
+          : 'Tốc độ 0.8x, AI có gợi ý từ và giải thích — phù hợp người mới bắt đầu.'}
+      </p>
+
+      {/* CTA Button — full width, premium weight */}
+      <motion.button
+        whileTap={{ scale: 0.99 }}
+        onClick={handleSubmit}
+        className="w-full flex items-center justify-center gap-2 h-11 mt-1 bg-primary-600 text-white rounded-[8px] text-[14px] font-medium hover:bg-primary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-600"
+      >
+        <PlayCircle size={18} weight="fill" />
+        <span>Trò chuyện với AI</span>
+      </motion.button>
+
+      {/* Inline reassurance */}
+      <p className="text-[12px] text-stone text-center leading-relaxed">
+        Thoải mái trò chuyện như với bạn bè · AI sẽ dựa vào video để mở lời
+      </p>
     </div>
   );
 }

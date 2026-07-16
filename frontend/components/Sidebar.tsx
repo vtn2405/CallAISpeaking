@@ -12,14 +12,16 @@ import {
   PenNib, 
   Books, 
   Info,
-  LockKey
+  LockKey,
+  CaretLeft,
+  CaretRight
 } from '@phosphor-icons/react';
 
 const MAIN_LINKS = [
-  { href: '/', label: 'Dashboard', icon: SquaresFour, locked: false },
-  { href: '/practice', label: 'Practice', icon: MicrophoneStage, locked: false },
-  { href: '/mock-test', label: 'Mock test', icon: PenNib, locked: true },
-  { href: '/library', label: 'History', icon: Books, locked: false },
+  { href: '/', label: 'Trang chủ', icon: SquaresFour, locked: false },
+  { href: '/practice', label: 'Luyện tập', icon: MicrophoneStage, locked: false },
+  { href: '/mock-test', label: 'Thi thử', icon: PenNib, locked: true },
+  { href: '/history', label: 'Lịch sử', icon: Books, locked: false },
 ];
 
 const SECONDARY_LINKS = [
@@ -30,6 +32,7 @@ export default function Sidebar() {
   const pathname = usePathname();
   const [hoveredHref, setHoveredHref] = useState<string | null>(null);
   const [showLockModal, setShowLockModal] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const renderNavLink = (link: typeof MAIN_LINKS[0], isSecondary: boolean = false) => {
     const isActive = link.href === '/' ? pathname === '/' : pathname.startsWith(link.href);
@@ -41,7 +44,7 @@ export default function Sidebar() {
         {!isSecondary && isHovered && !isActive && (
           <motion.div
             layoutId="sidebar-hover"
-            className="absolute inset-0 rounded-xl bg-zinc-100/60"
+            className="absolute inset-0 rounded-[6px] bg-surface"
             initial={false}
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
@@ -49,19 +52,25 @@ export default function Sidebar() {
         {!isSecondary && isActive && (
           <motion.div
             layoutId="sidebar-active"
-            className="absolute inset-0 rounded-xl bg-primary-50"
+            className="absolute inset-0 rounded-[6px] bg-surface border border-hairline"
             initial={false}
             transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
           />
         )}
         
-        <span className={`relative z-10 w-5 flex items-center justify-center shrink-0 ${isActive ? 'text-primary-600' : link.locked ? 'text-zinc-400' : 'text-zinc-500 group-hover:text-zinc-900'}`}>
-          <Icon weight={isActive ? 'fill' : 'regular'} size={20} />
+        <span className={`relative z-10 w-5 flex items-center justify-center shrink-0 ${isActive ? 'text-charcoal' : link.locked ? 'text-muted' : 'text-stone group-hover:text-charcoal'}`}>
+          <Icon weight={isActive ? 'fill' : 'regular'} size={16} />
         </span>
-        <span className={`relative z-10 text-sm font-medium transition-colors duration-200 ${isActive ? 'text-primary-600 font-bold' : link.locked ? 'text-zinc-400' : 'text-zinc-600 group-hover:text-zinc-900'}`}>
+        
+        <span 
+          className={`relative z-10 text-[13px] whitespace-nowrap overflow-hidden transition-all duration-300 ${
+            isCollapsed ? 'w-0 opacity-0 ml-0' : 'w-auto opacity-100 ml-0'
+          } ${isActive ? 'text-charcoal font-medium' : link.locked ? 'text-muted' : 'text-steel font-normal group-hover:text-charcoal'}`}
+        >
           {link.label}
         </span>
-        {link.locked && (
+        
+        {!isCollapsed && link.locked && (
           <span className="relative z-10 ml-auto text-zinc-400">
             <LockKey weight="bold" size={14} />
           </span>
@@ -69,7 +78,7 @@ export default function Sidebar() {
       </>
     );
 
-    const className = "relative flex items-center gap-3 px-3 py-2.5 rounded-xl transition-colors group cursor-pointer";
+    const className = `relative flex items-center gap-2.5 ${isCollapsed ? 'px-0 justify-center w-8 h-8 mx-auto' : 'px-2.5'} py-1.5 rounded-[6px] transition-colors group cursor-pointer`;
 
     if (link.locked) {
       return (
@@ -97,16 +106,44 @@ export default function Sidebar() {
   };
 
   return (
-    <aside className="w-[220px] bg-white border-r border-zinc-200 min-h-[100dvh] flex flex-col fixed left-0 top-0 bottom-0 z-50">
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-5 pt-6 pb-5 border-b border-zinc-100">
-        <div className="relative w-9 h-9 rounded-xl overflow-hidden shrink-0">
-          <Image src="/logo.png" alt="Logo" fill className="object-cover" priority />
+    <aside 
+      className={`${
+        isCollapsed ? 'w-[68px]' : 'w-[220px]'
+      } bg-canvas border-r border-hairline sticky top-0 h-[100dvh] flex flex-col shrink-0 z-50 transition-[width] duration-300 ease-in-out`}
+    >
+      {/* Logo & Toggle */}
+      <div className={`flex items-center ${isCollapsed ? 'justify-center flex-col gap-2' : 'gap-3'} px-4 pt-5 pb-4 border-b border-hairline`}>
+        <div className="flex items-center justify-between w-full">
+          <div className="flex items-center gap-3">
+            <div className="relative w-8 h-8 rounded-[8px] overflow-hidden shrink-0">
+              <Image src="/logo.png" alt="Logo" fill className="object-cover" sizes="32px" priority />
+            </div>
+            {!isCollapsed && (
+              <div className="flex flex-col leading-[1.2] whitespace-nowrap overflow-hidden transition-all duration-300">
+                <span className="text-[12px] font-semibold tracking-wide text-ink">AI Speaking</span>
+                <span className="text-[11px] tracking-wide text-steel">Coach</span>
+              </div>
+            )}
+          </div>
+          
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className={`w-6 h-6 flex items-center justify-center rounded-md hover:bg-surface text-stone hover:text-charcoal transition-colors ${isCollapsed ? 'hidden' : ''}`}
+            aria-label="Toggle sidebar"
+          >
+            <CaretLeft size={14} weight="bold" />
+          </button>
         </div>
-        <div className="flex flex-col leading-[1.15]">
-          <span className="text-[11px] font-extrabold tracking-widest text-zinc-900">AI SPEAKING</span>
-          <span className="text-[11px] font-semibold tracking-wider text-zinc-500">COACH</span>
-        </div>
+
+        {isCollapsed && (
+          <button
+            onClick={() => setIsCollapsed(!isCollapsed)}
+            className="w-6 h-6 flex items-center justify-center rounded-md hover:bg-surface text-stone hover:text-charcoal transition-colors"
+            aria-label="Toggle sidebar"
+          >
+            <CaretRight size={14} weight="bold" />
+          </button>
+        )}
       </div>
 
       {/* Main Navigation */}
@@ -126,15 +163,19 @@ export default function Sidebar() {
       </nav>
 
       {/* User section */}
-      <div className="flex items-center gap-3 p-4 border-t border-zinc-100 cursor-pointer hover:bg-zinc-50 transition-colors group">
-        <div className="w-9 h-9 rounded-full bg-zinc-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
+      <div className={`flex items-center ${isCollapsed ? 'justify-center p-3' : 'gap-3 p-4'} border-t border-hairline cursor-pointer hover:bg-surface transition-colors group`}>
+        <div className="w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center font-medium text-sm shrink-0">
           M
         </div>
-        <div className="flex-1 flex flex-col leading-tight">
-          <span className="text-[13px] font-semibold text-zinc-900 group-hover:text-black">Minh</span>
-          <span className="text-[11px] text-zinc-500">Tài khoản của tôi</span>
-        </div>
-        <span className="text-zinc-400 text-lg leading-none group-hover:text-zinc-600 transition-colors">›</span>
+        {!isCollapsed && (
+          <>
+            <div className="flex-1 flex flex-col leading-tight whitespace-nowrap overflow-hidden transition-all duration-300">
+              <span className="text-[13px] font-medium text-ink">Minh</span>
+              <span className="text-[11px] text-steel">Tài khoản của tôi</span>
+            </div>
+            <span className="text-stone text-lg leading-none transition-colors">›</span>
+          </>
+        )}
       </div>
 
       {showLockModal && <LockedNavModal onClose={() => setShowLockModal(false)} />}

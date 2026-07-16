@@ -19,6 +19,8 @@ interface CallHeaderMinimalProps {
   videoTitle: string;
   micState: MicState;
   onToggleMute: () => void;
+  badgeText?: string;
+  badgeType?: 'pending' | 'active';
 }
 
 export default function CallHeaderMinimal({
@@ -26,6 +28,8 @@ export default function CallHeaderMinimal({
   videoTitle,
   micState,
   onToggleMute,
+  badgeText = 'ĐANG TRÒ CHUYỆN',
+  badgeType = 'active',
 }: CallHeaderMinimalProps) {
   const router = useRouter();
 
@@ -46,20 +50,15 @@ export default function CallHeaderMinimal({
         </button>
       </div>
 
-      {/* Center: live badge + timer + video title */}
+      {/* Center: live badge + timer */}
       <div className={styles.headerCenter}>
-        <span className={styles.liveBadge} aria-label="Đang trong phiên học">
-          <span className={styles.liveDot} aria-hidden="true" />
-          ĐANG HỌC
+        <span className={`${styles.liveBadge} ${badgeType === 'pending' ? styles.liveBadgePending : ''}`} aria-label="Trạng thái">
+          <span className={`${styles.liveDot} ${badgeType === 'pending' ? styles.liveDotPending : ''}`} aria-hidden="true" />
+          {badgeText}
         </span>
         <span className={styles.timer} aria-label={`Thời gian: ${timer}`}>
           {timer}
         </span>
-        {videoTitle && (
-          <span className={styles.videoTitle} title={videoTitle}>
-            {videoTitle}
-          </span>
-        )}
       </div>
 
       {/* Right: mute icon only (no end call — that's in the footer) */}

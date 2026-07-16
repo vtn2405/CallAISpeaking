@@ -24,18 +24,33 @@ export async function POST(req: NextRequest) {
   const mode      = body.mode === 'beginner' ? 'beginner' : 'video_chat';
   const sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
-  // Derive a display title from the YouTube URL
-  let title = 'Video Session';
+  // Derive a display title and channel from the YouTube URL
+  let title = 'Video speaking session';
+  let channelName: string | undefined = undefined;
+  let videoId: string | undefined = undefined;
+
   try {
-    const url = new URL(videoUrl);
-    const v = url.searchParams.get('v');
-    if (v) title = `YouTube Video (${v.slice(0, 8)})`;
+    // Basic regex for youtube URLs (v=... or youtu.be/...)
+    const match = videoUrl.match(/(?:v=|\/)([0-9A-Za-z_-]{11}).*/);
+    if (match) {
+      videoId = match[1];
+      const oembedRes = await fetch(`https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${videoId}&format=json`, {
+        // fast timeout so we don't block session init too long
+        signal: AbortSignal.timeout(1500)
+      });
+      if (oembedRes.ok) {
+        const data = await oembedRes.json();
+        title = data.title || title;
+        channelName = data.author_name;
+      }
+    }
   } catch {
-    // non-URL input — keep default title
+    // fallback to default title if fetch fails or URL is invalid
   }
 
   const metadata = {
     title,
+    channelName,
     duration: 900,           // 15 min placeholder; real backend provides actual value
     thumbnailUrl: undefined as string | undefined,
     mode,                    // "video_chat" | "beginner" — read by ai_turn.py
