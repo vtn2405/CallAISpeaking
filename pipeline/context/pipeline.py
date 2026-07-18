@@ -85,12 +85,12 @@ async def build_context(
 
     logger.info("[pipeline] Starting context build for video_id=%s", video_id)
 
-    # ── Steps 2-4: Extract + Normalize + Chunk (blocking I/O in thread) ───────
-    loop = asyncio.get_event_loop()
+    # ── Steps 2-4: Extract + Normalize + Chunk ───────
     try:
+        # get_transcript is now async and handles its own polling/timeouts
         raw_segments = await asyncio.wait_for(
-            loop.run_in_executor(_executor, get_transcript, video_id),
-            timeout=timeout_sec * 0.5,  # Give 50% of budget to transcript fetch
+            get_transcript(video_id),
+            timeout=timeout_sec * 0.8,  # Give 80% of budget to transcript fetch since it can be slow (ASR)
         )
     except asyncio.TimeoutError:
         raise ContextPipelineError(

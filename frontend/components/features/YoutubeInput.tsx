@@ -96,24 +96,59 @@ export default function YoutubeInput() {
         return;
       }
 
-      // 2. Run the fake steps animation in parallel with the actual API call
-      // to keep the UI active
-      const stepsPromise = (async () => {
-        for (let i = 0; i < STEPS.length; i++) {
-          if (abortRef.current) break;
-          setCurrentStepIndex(i);
-          const step = STEPS[i];
-          if (i > 0) setStepStatuses((s) => ({ ...s, [STEPS[i - 1].key]: 'done' }));
-          setStepStatuses((s) => ({ ...s, [step.key]: 'active' }));
-          setCurrentTitle(step.title);
-          setCurrentSub(step.sub);
-          await delay(step.ms);
+      // 2. Start Ingestion Job
+      setCurrentTitle('Đang khởi tạo...');
+      setCurrentSub('Bắt đầu tải dữ liệu video');
+      
+      const videoId = extractYouTubeId(trimmed) || '';
+      
+      // In a real app, this would hit Next.js /api/ingest which proxies to Azure worker
+      // For MVP we assume the route exists and returns { job_id }
+      const ingestRes = await fetch('/api/ingest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ video_id: videoId, language_preference: 'en' }),
+      }).catch(() => null); // Ignore fetch errors for MVP fallback if route doesn't exist yet
+      
+      let isReady = false;
+      
+      if (ingestRes && ingestRes.ok) {
+        const { job_id } = await ingestRes.json();
+        
+        // 3. Poll for status
+        for (let i = 0; i < 35; i++) {
+          if (abortRef.current) return;
+          
+          const statusRes = await fetch(`/api/ingest/${job_id}`);
+          if (statusRes.ok) {
+            const statusData = await statusRes.json();
+            if (statusData.status === 'ready') {
+              isReady = true;
+              break;
+            } else if (statusData.status === 'failed') {
+              throw new Error(statusData.error || 'Ingestion failed');
+            }
+          }
+          
+          if (i === 3) {
+             setCurrentTitle('Đang chuẩn bị video...');
+             setCurrentSub('Phân tích nội dung và trích xuất transcript');
+          }
+          if (i === 8) {
+             setCurrentTitle('Video đang được xử lý...');
+             setCurrentSub('Quá trình này có thể mất đến 60s nếu cần nhận dạng giọng nói tự động (ASR).');
+          }
+          await delay(2000);
         }
-      })();
+        if (!isReady) throw new Error('Timeout waiting for video preparation');
+      } else {
+         // Fallback if API doesn't exist yet (for dev environment)
+         await delay(1500);
+      }
 
-      const initPromise = initSession(trimmed, mode);
-
-      const [res] = await Promise.all([initPromise, stepsPromise]);
+      setCurrentTitle('Sẵn sàng hội thoại!');
+      setCurrentSub('Đang mở màn hội thoại…');
+      const res = await initSession(trimmed, mode);
 
       if (!abortRef.current) {
         setIsTransitioning(true);
