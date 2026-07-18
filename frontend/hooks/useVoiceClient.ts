@@ -434,14 +434,11 @@ export function useVoiceClient({
     onSessionStateChangeRef.current('listening');
     sessionStateRef.current = 'listening';
 
-    const MIC_CONSTRAINTS: MediaStreamConstraints = {
-      audio: true, // Use a simple boolean instead of complex constraints to prevent privacy extensions from stripping it
-    };
-
     // ── Mock mode ────────────────────────────────────────────────────────────
     const mock = transport as Partial<MockTransport>;
     if (typeof mock.simulateUserSpeech === 'function') {
-      navigator.mediaDevices?.getUserMedia(MIC_CONSTRAINTS)
+      // Pass constraints inline to prevent bundler dead-code elimination
+      navigator.mediaDevices?.getUserMedia({ audio: true, video: false })
         .then((stream) => { streamRef.current = stream; })
         .catch(() => {});
       mock.simulateUserSpeech();
@@ -449,8 +446,19 @@ export function useVoiceClient({
     }
 
     // ── Real mode: MediaRecorder ─────────────────────────────────────────────
-    console.log(`[gstack] getUserMedia started`);
-    navigator.mediaDevices?.getUserMedia(MIC_CONSTRAINTS)
+    // Constraints are passed inline (not via variable) to prevent Next.js/swc
+    // from dead-code-eliminating the `audio: true` property during minification.
+    const constraints = { audio: true as boolean | MediaTrackConstraints, video: false as boolean | MediaTrackConstraints };
+    if (!constraints.audio) {
+      // Safety guard: if bundler strips audio, log clearly and abort
+      console.error('[useVoiceClient] FATAL: audio constraint was stripped by bundler — cannot start mic');
+      isRecordingRef.current = false;
+      onSessionStateChangeRef.current('idle');
+      sessionStateRef.current = 'idle';
+      return;
+    }
+    console.log(`[gstack] getUserMedia started`, constraints);
+    navigator.mediaDevices?.getUserMedia(constraints)
       .then((stream) => {
         console.log(`[gstack] getUserMedia success`);
         streamRef.current = stream;
