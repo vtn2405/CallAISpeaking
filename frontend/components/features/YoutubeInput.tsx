@@ -115,29 +115,38 @@ export default function YoutubeInput() {
       if (ingestRes && ingestRes.ok) {
         const { job_id } = await ingestRes.json();
         
-        // 3. Poll for status
-        for (let i = 0; i < 35; i++) {
+        // 3. Poll for status — stable schema from Pipeline Facade:
+        //    { status: "queued"|"processing"|"completed"|"failed", progress: 0-100, error_code }
+        for (let i = 0; i < 45; i++) {
           if (abortRef.current) return;
           
           const statusRes = await fetch(`/api/ingest/${job_id}`);
           if (statusRes.ok) {
             const statusData = await statusRes.json();
-            if (statusData.status === 'ready') {
+
+            // Update progress sub-text
+            if (statusData.progress !== undefined) {
+              if (statusData.progress < 20) {
+                setCurrentTitle('Đang chuẩn bị video...');
+                setCurrentSub('Kết nối tới YouTube và trích xuất transcript');
+              } else if (statusData.progress < 80) {
+                setCurrentTitle('Video đang được xử lý...');
+                setCurrentSub('Quá trình này có thể mất đến 60s nếu cần nhận dạng giọng nói tự động (ASR).');
+              }
+            }
+
+            if (statusData.status === 'completed') {
               isReady = true;
               break;
             } else if (statusData.status === 'failed') {
-              throw new Error(statusData.error || 'Ingestion failed');
+              const errorCode = statusData.error_code;
+              if (errorCode === 'TRANSCRIPT_NOT_AVAILABLE') {
+                throw new Error('VIDEO_HAS_NO_CAPTIONS');
+              }
+              throw new Error('TRANSCRIPT_PROVIDER_DOWN');
             }
           }
           
-          if (i === 3) {
-             setCurrentTitle('Đang chuẩn bị video...');
-             setCurrentSub('Phân tích nội dung và trích xuất transcript');
-          }
-          if (i === 8) {
-             setCurrentTitle('Video đang được xử lý...');
-             setCurrentSub('Quá trình này có thể mất đến 60s nếu cần nhận dạng giọng nói tự động (ASR).');
-          }
           await delay(2000);
         }
         if (!isReady) throw new Error('Timeout waiting for video preparation');
@@ -145,6 +154,7 @@ export default function YoutubeInput() {
          // Fallback if API doesn't exist yet (for dev environment)
          await delay(1500);
       }
+
 
       setCurrentTitle('Sẵn sàng hội thoại!');
       setCurrentSub('Đang mở màn hội thoại…');
