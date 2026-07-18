@@ -298,7 +298,7 @@ async def facade_ingest_status(job_id: str) -> dict:
         if res.status_code == 404:
             raise HTTPException(status_code=404, detail="Job not found")
 
-        if not res.ok:
+        if res.is_error:
             raise HTTPException(
                 status_code=502,
                 detail={"error_code": "TRANSCRIPT_PROVIDER_DOWN", "message": "Worker unreachable"},
