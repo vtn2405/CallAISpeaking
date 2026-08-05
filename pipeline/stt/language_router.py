@@ -46,17 +46,19 @@ _WORD_RE = re.compile(r"[A-Za-zÀ-ỹĐđ']+")
 
 # ── Intent patterns ────────────────────────────────────────────────────────────
 # BUG FIX #1: Narrowed _EXPLICIT_HELP_VI.
-# Old: r"từ.*?này" — matches almost any sentence containing "từ" and "này".
+# Old: r"từ.*?này" — matches almost any sentence containing "từ" và "này".
 # New: requires "từ" to be directly adjacent to a noun/pronoun marker before "này"
 #      and adds "cho ví dụ" as a separate alternative.
 _EXPLICIT_HELP_VI = re.compile(
     r"(?:"
-    r"nói thế nào"
-    r"|tiếng anh là gì"
-    r"|gọi là gì"
-    r"|dịch là gì"
-    r"|từ này"           # narrowed: exact phrase only
-    r"|cho ví dụ"
+    r"n\u00f3i th\u1ebf n\u00e0o|noi the nao"                      # how to say (VI)
+    r"|ti\u1ebfng anh l\u00e0 g\u00ec|tieng anh la gi"             # how do you say in English
+    r"|g\u1ecdi l\u00e0 g\u00ec|goi la gi"                         # what is it called
+    r"|d\u1ecbch l\u00e0 g\u00ec|dich la gi"                       # how to translate
+    r"|c\u00f3 ngh\u0129a l\u00e0 g\u00ec|co nghia la gi"          # what does X mean (full)
+    r"|ngh\u0129a l\u00e0 g\u00ec|nghia la gi"                     # what does X mean (short)
+    r"|t\u1eeb n\u00e0y|tu nay"                                    # this word
+    r"|cho v\u00ed d\u1ee5|cho vi du"                              # give an example
     r")",
     re.IGNORECASE,
 )
@@ -105,14 +107,18 @@ def _extract_embedded_phrase(verbatim_text: str, routing_patterns: list[str]) ->
     New: attempts to extract the Vietnamese/foreign phrase the user is asking about.
 
     Strategy: for "explicit_word_help" turns, look for a substring of tokens
-    that are mostly Vietnamese (diacritics present) before the help trigger phrase.
+    that are mostly Vietnamese (diacritics present) before the help trigger phrase,
+    OR the foreign/English word before a VI trigger phrase (e.g. "disaster ngh\u0129a l\u00e0 g\u00ec").
     Falls back to the first non-function-word noun-ish phrase if extraction fails.
     """
     # Try to find the phrase before the help trigger
     for pattern in [
-        r"(.+?)(?:nói thế nào|tiếng anh là gì|gọi là gì|dịch là gì|từ này|cho ví dụ)",
+        # VI trigger phrases — capture everything before them
+        r"(.+?)(?:n\u00f3i th\u1ebf n\u00e0o|ti\u1ebfng anh l\u00e0 g\u00ec|g\u1ecdi l\u00e0 g\u00ec|d\u1ecbch l\u00e0 g\u00ec|c\u00f3 ngh\u0129a l\u00e0 g\u00ec|ngh\u0129a l\u00e0 g\u00ec|t\u1eeb n\u00e0y|cho v\u00ed d\u1ee5)",
+        # EN trigger phrases
         r"(?:how do i say|how to say)\s+(.+?)(?:\s+in english)?$",
         r"(?:what is)\s+(.+?)\s+(?:in english)",
+        r"(?:what does)\s+(.+?)\s+mean",
     ]:
         m = re.search(pattern, verbatim_text, re.IGNORECASE)
         if m:
@@ -120,7 +126,7 @@ def _extract_embedded_phrase(verbatim_text: str, routing_patterns: list[str]) ->
             if candidate and len(candidate.split()) <= 8:
                 return candidate
 
-    # Fallback: return the first Vietnamese-token cluster
+    # Fallback 1: return the first Vietnamese-token cluster
     tokens = verbatim_text.split()
     vi_cluster = []
     for tok in tokens:
@@ -130,6 +136,14 @@ def _extract_embedded_phrase(verbatim_text: str, routing_patterns: list[str]) ->
             break
     if vi_cluster:
         return " ".join(vi_cluster)
+
+    # Fallback 2: return the first non-function-word token.
+    # Handles "disaster ngh\u0129a l\u00e0 g\u00ec" where "disaster" is a pure English word
+    # not caught by VI-cluster (no diacritics) but should be the extracted phrase.
+    for tok in tokens:
+        t = tok.lower().strip(".,?!")
+        if t and t not in _EN_FUNCTION_WORDS and len(t) > 2 and t.isalpha():
+            return tok
 
     return ""  # empty string, not placeholder — callers should handle this
 

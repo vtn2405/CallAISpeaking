@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowRight, Clock, Play, DotsThree, Trash, YoutubeLogo } from '@phosphor-icons/react';
 import { getRecentSessions, deleteSession } from '@/lib/historyRepository';
-import { getOrCreateGuestId } from '@/lib/identity';
+import { getUserIdentity } from '@/lib/identity';
 import type { ArchivedSession } from '@/types/history';
 
 function formatRelativeTime(isoString: string): string {
@@ -47,7 +47,7 @@ export default function RecentSessions() {
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      const guestId = getOrCreateGuestId();
+      const guestId = await getUserIdentity();
       if (!guestId) {
         setLoading(false);
         return;

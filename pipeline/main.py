@@ -21,14 +21,16 @@ Context pipeline (new in Phase 1):
 """
 from __future__ import annotations
 
+import hmac
 import os
 import logging
 
 import httpx
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 from context import build_context, ContextPipelineError
@@ -41,7 +43,57 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# ── Secrets ───────────────────────────────────────────────────────────────────
+# PIPELINE_SECRET — authenticates Next.js → Pipeline REST calls.
+# WORKER_SECRET   — authenticates Pipeline → Ingestion Worker calls.
+_ENV = os.getenv("ENV", "development")
+PIPELINE_SECRET: str = os.getenv("PIPELINE_SECRET", "dev-pipeline-secret")
+WORKER_SECRET: str   = os.getenv("WORKER_SECRET",   "dev-worker-secret")
+
+_bearer_scheme = HTTPBearer(auto_error=True)
+
+
+def verify_pipeline_token(
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer_scheme),
+) -> None:
+    """FastAPI dependency: rejects any request without a valid PIPELINE_SECRET Bearer token."""
+    if not hmac.compare_digest(credentials.credentials, PIPELINE_SECRET):
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+
+def _worker_headers() -> dict:
+    """Authorization header for outbound Pipeline → Worker requests."""
+    return {"Authorization": f"Bearer {WORKER_SECRET}"}
+
+
 app = FastAPI(title="ChatboxAI Pipecat WS Shim", version="0.2.0")
+
+
+@app.on_event("startup")
+async def _startup_checks() -> None:
+    """Fail fast in production if secrets are still at their insecure defaults."""
+    if _ENV == "production":
+        if PIPELINE_SECRET in ("dev-pipeline-secret", ""):
+            raise RuntimeError(
+                "PIPELINE_SECRET must be set to a secure value in production. "
+                "Set the PIPELINE_SECRET environment variable."
+            )
+        if WORKER_SECRET in ("dev-worker-secret", ""):
+            raise RuntimeError(
+                "WORKER_SECRET must be set to a secure value in production. "
+                "Set the WORKER_SECRET environment variable."
+            )
+    logger.info(
+        "[startup] Security: ENV=%s | PIPELINE_SECRET=%s | WORKER_SECRET=%s",
+        _ENV,
+        "(default — INSECURE)" if PIPELINE_SECRET == "dev-pipeline-secret" else "(set)",
+        "(default — INSECURE)" if WORKER_SECRET == "dev-worker-secret" else "(set)",
+    )
+    logger.warning(
+        "[startup] WS frame limit: ensure '--ws-max-size 32768' is set in your "
+        "production uvicorn CLI command. The __main__ block sets ws_max_size=32768 "
+        "but this is ignored when launched via 'uvicorn main:app' directly."
+    )
 
 # ── Worker error code mapping ─────────────────────────────────────────────────
 # Worker-internal codes → stable frontend-facing codes.
@@ -83,7 +135,7 @@ async def health() -> dict:
 
 
 # ── Azure Speech token exchange ───────────────────────────────────────────────
-@app.get("/api/speech-token")
+@app.get("/api/speech-token", dependencies=[Depends(verify_pipeline_token)])
 async def get_speech_token() -> dict:
     """
     Exchange the server-side Azure Speech key for a short-lived access token.
@@ -130,7 +182,7 @@ async def get_speech_token() -> dict:
 
 
 # ── Session pre-registration + context pipeline ───────────────────────────────
-@app.post("/api/sessions/register")
+@app.post("/api/sessions/register", dependencies=[Depends(verify_pipeline_token)])
 async def register_session(body: dict) -> dict:
     """
     Pre-create a CREATED session record with full video context.
@@ -178,13 +230,11 @@ async def register_session(body: dict) -> dict:
             context.summary_ready,
         )
     except ContextPipelineError as exc:
-        # Transcript unavailable or URL invalid — fail fast, do not create session
-        logger.warning(
-            "Context pipeline failed for session %s: %s",
-            session_id,
-            exc,
-        )
-        return {"ok": False, "error": str(exc)}
+        logger.error("Context build failed for %s: %s", session_id, exc)
+        context_error = str(exc)
+
+    if context_error or not context:
+        return {"ok": False, "error": context_error or "Unknown error generating context"}
 
     # ── Register session in store ─────────────────────────────────────────────
     try:
@@ -197,8 +247,29 @@ async def register_session(body: dict) -> dict:
     return {
         "ok": True,
         "contextReady": True,
-        "summaryReady": context.summary_ready,
+        "summaryReady": context.summary_ready
     }
+
+
+@app.post("/api/sessions/prefetch", dependencies=[Depends(verify_pipeline_token)])
+async def prefetch_session(body: dict) -> dict:
+    """
+    Prefetch context pipeline for a video to speed up later registration.
+    Request: { "videoUrl": "..." }
+    """
+    video_url = body.get("videoUrl", "")
+    if not video_url:
+        return {"ok": False, "error": "videoUrl is required"}
+        
+    try:
+        from context.parser import parse_youtube_url
+        video_id = parse_youtube_url(video_url)
+        from context.pipeline import prefetch_context
+        prefetch_context(video_id, video_url)
+        return {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
 
 
 # ── Ingestion Facade API ──────────────────────────────────────────────────────
@@ -215,7 +286,7 @@ def _worker_url() -> str:
     return os.environ.get("INGESTION_WORKER_URL", "http://localhost:8001").rstrip("/")
 
 
-@app.post("/api/ingest")
+@app.post("/api/ingest", dependencies=[Depends(verify_pipeline_token)])
 async def facade_ingest(req: IngestRequest) -> dict:
     """
     Facade endpoint: start a transcript ingestion job.
@@ -241,6 +312,7 @@ async def facade_ingest(req: IngestRequest) -> dict:
                         "language_preference": req.language_preference,
                         "force_refresh": req.force_refresh,
                     },
+                    headers=_worker_headers(),
                 )
             if res.status_code == 200:
                 data = res.json()
@@ -265,7 +337,7 @@ async def facade_ingest(req: IngestRequest) -> dict:
     raise HTTPException(status_code=503, detail={"error_code": "TRANSCRIPT_PROVIDER_DOWN"})
 
 
-@app.get("/api/ingest/{job_id}")
+@app.get("/api/ingest/{job_id}", dependencies=[Depends(verify_pipeline_token)])
 async def facade_ingest_status(job_id: str) -> dict:
     """
     Facade endpoint: poll job status.
@@ -293,7 +365,10 @@ async def facade_ingest_status(job_id: str) -> dict:
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            res = await client.get(f"{url}/api/ingest/{job_id}")
+            res = await client.get(
+                f"{url}/api/ingest/{job_id}",
+                headers=_worker_headers(),
+            )
 
         if res.status_code == 404:
             raise HTTPException(status_code=404, detail="Job not found")
@@ -337,10 +412,95 @@ async def facade_ingest_status(job_id: str) -> dict:
         )
 
 
+# ── Beginner Support API ──────────────────────────────────────────────────────
+
+class HintsRequest(BaseModel):
+    aiSentence: str
+    mode: str = "beginner"
+
+
+class LookupRequest(BaseModel):
+    sessionId: str | None = None
+    messageId: str | None = None
+    tappedTerm: str
+    originalSentence: str
+    forceLlm: bool = False
+
+
+@app.post("/api/sessions/{session_id}/hints", dependencies=[Depends(verify_pipeline_token)])
+async def get_hints(session_id: str, body: HintsRequest):
+    """
+    Lazily generate beginner hints for the most recent AI turn.
+
+    Called ONLY when user taps "Tôi nên nói gì?" or "Câu đó nghĩa là gì?".
+    Returns ONE JSON that feeds BOTH buttons (cache it on the frontend per turn).
+    """
+    from assistant import generate_hints
+
+    record = await store.get(session_id)
+    summary_digest = ""
+    history: list[dict] = []
+
+    if record and record.context:
+        outline = record.context.outline
+        title = outline.title or ""
+        events = [getattr(e, "label", getattr(e, "description", "")) for e in (outline.key_events or [])]
+        events_str = ", ".join(e for e in events if e)
+        summary_digest = f"Topic: {title}. Keywords: {events_str}"
+
+    # Get recent conversation history from ai_turn's in-memory store
+    from ai_turn import _session_history
+    full_history = _session_history.get(session_id, [])
+    # Only keep the very last user message to save tokens (AI sentence is already passed separately)
+    for msg in reversed(full_history):
+        if msg.get("role") == "user":
+            history = [msg]
+            break
+
+    result = await generate_hints(
+        ai_sentence=body.aiSentence,
+        history=history,
+        summary_digest=summary_digest,
+        mode=body.mode,
+    )
+    return result
+
+
+@app.post("/api/lookup", dependencies=[Depends(verify_pipeline_token)])
+async def lookup_word_endpoint(body: LookupRequest):
+    """
+    Contextual word/phrase lookup with collocation detection.
+
+    Returns startChar/endChar offsets computed by Gemini into the originalSentence.
+    These MUST be used for highlighting (not the tapped word length) because
+    Gemini may expand the span to cover the full collocation.
+    """
+    from assistant import lookup_word
+
+    session_id = body.sessionId or ""
+    summary = ""
+
+    if session_id:
+        record = await store.get(session_id)
+        if record and record.context:
+            summary = record.context.outline.summary_text or ""
+
+    result = await lookup_word(
+        tapped_term=body.tappedTerm,
+        original_sentence=body.originalSentence,
+        summary=summary,
+        force_llm=body.forceLlm,
+        session_id=session_id,
+    )
+    return result
+
+
 # ── Entry point ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
 
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", "8000"))
-    uvicorn.run("main:app", host=host, port=port, reload=True)
+    # ws_max_size: ASGI-level WebSocket frame size limit (bytes).
+    # IMPORTANT: when deploying via CLI, add: --ws-max-size 32768
+    uvicorn.run("main:app", host=host, port=port, reload=True, ws_max_size=32_768)

@@ -67,11 +67,73 @@ _FALLBACK_MESSAGE = (
     "Could you repeat that, or shall we continue talking about the video?"
 )
 
+# ── Vietnamese language guard ─────────────────────────────────────────────────
+# Letters used in Vietnamese that never appear in standard English text.
+# Matching any of them in the AI reply is a reliable signal that the model
+# replied in Vietnamese instead of English.
+_VI_CHARS = re.compile(r"[đĐăĂâÂêÊôÔơƠưƯẠ-ỹ]")
+
+def _looks_vietnamese(text: str) -> bool:
+    """Return True if text contains Vietnamese-specific diacritics (đ, ă, â, ê, ô, ơ, ư and tonal marks)."""
+    return bool(_VI_CHARS.search(text))
+
+
+async def _force_english_if_vietnamese(client: Any, deployment: str, text: str) -> str:
+    """
+    If text looks Vietnamese, call the model once more with an explicit English-only
+    system message and return the English rewrite. Used by both the streaming path
+    and the unary _grounded_response path so no Vietnamese slips through on fallback.
+    """
+    if not text or not _looks_vietnamese(text):
+        return text
+    logger.warning("[ai_turn] reply looked Vietnamese — forcing English regen")
+    msgs = [
+        {"role": "system", "content": (
+            "You are an English-only assistant. Your previous reply was in Vietnamese, which is WRONG "
+            "for this English-practice app. Rewrite it entirely in natural English, same meaning and length."
+        )},
+        {"role": "user", "content": text},
+    ]
+    kw: dict = {"model": deployment, "messages": msgs}
+    if _REASONING_EFFORT_SUPPORTED:
+        kw["reasoning_effort"] = "minimal"
+    try:
+        comp = await client.chat.completions.create(**kw)
+        out = (comp.choices[0].message.content or "").strip()
+        return out or text
+    except Exception as exc:
+        logger.warning("[ai_turn] VN regen failed: %s", exc)
+        return text
+
+
 # Per-session conversation history: session_id → list[{role, content}] (OpenAI format)
 _session_history: dict[str, list[dict]] = {}
 
+# Per-session rolling summary of turns that have rolled off the verbatim window.
+# Only turns older than MAX_HISTORY_TURNS are summarised here — no overlap with history.
+_session_summary: dict[str, str] = {}
 
-async def run_turn(ws: Any, session_id: str, user_text: str, *, meta: dict | None = None) -> str:
+# Per-session topic anchor: extracted once from outline.summary_text on first turn, then cached.
+_session_topic_anchor: dict[str, str] = {}
+
+# ── reasoning_effort capability probe ────────────────────────────────────────
+# Tried once at runtime. If Azure returns 400 (param unsupported for this
+# deployment / api-version), we set this False and never pass it again.
+# This prevents double-call regression: we probe, cache result, done.
+# None = not yet probed. True = supported. False = rejected by Azure.
+_REASONING_EFFORT_SUPPORTED: bool | None = None
+
+
+def _build_create_kwargs(extra: dict | None = None) -> dict:
+    """Return kwargs for chat.completions.create, injecting reasoning_effort
+    only when it is known to be supported by this deployment."""
+    kwargs: dict = {"reasoning_effort": "minimal"} if _REASONING_EFFORT_SUPPORTED else {}
+    if extra:
+        kwargs.update(extra)
+    return kwargs
+
+
+async def run_turn(ws: Any, session_id: str, user_text: str, *, meta: dict | None = None, turn_id: str | None = None) -> str:
     """
     Handle one full AI turn for a given user utterance.
 
@@ -88,20 +150,20 @@ async def run_turn(ws: Any, session_id: str, user_text: str, *, meta: dict | Non
         meta:        Optional code-switch metadata from the frontend STT layer.
                      Passed to build_system_prompt to generate a CODE-SWITCH SIGNAL
                      block. NEVER used as user-facing text or stored in history.
+        turn_id:     Unique identifier for this turn, used to match TTS acks.
 
     Returns:
         The text of the generated response.
     """
     await send_ai_thinking(ws)
     response = await _generate_response(session_id, user_text, meta=meta)
-    await send_ai_speaking(ws, response)
-    await send_transcript_update(ws, response, is_final=False, sender="ai")
+    await send_ai_speaking(ws, response, turn_id=turn_id)
+    await send_transcript_update(ws, response, is_final=False, sender="ai", turn_id=turn_id)
     return response
 
 
-# ── Sentence boundary pattern for streaming flush ───────────────────────────────
-# Matches '. ', '! ', '? ', '...', or end-of-string after content.
-_SENTENCE_BOUNDARY = re.compile(r'(?<=[.!?])[\s]|(?:)\.{3}')
+# ── Sentence boundary pattern for streaming flush (Removed in v3) ───────────────
+# We no longer flush per-sentence. Reply is gathered fully to avoid TTS gaps.
 
 
 async def run_turn_streaming(
@@ -111,27 +173,37 @@ async def run_turn_streaming(
     *,
     meta: dict | None = None,
     t0_stt_done: float | None = None,
+    turn_id: str | None = None,
 ) -> str:
     """
     Streaming variant of run_turn().
 
     Emits:
       1. ai.thinking   immediately (before LLM call)
-      2. ai.speaking   as soon as the first sentence boundary arrives from the
-                       LLM stream — frontend shows text + starts TTS early.
+      2. ai.speaking   ONCE at the end of generation with the full text.
       3. transcript.update(isFinal=False) after the full reply is assembled.
+
+    Uses create(stream=True) + delta.content iteration, NOT stream.text_stream
+    (which does not exist in the current SDK version).
+
+    reasoning_effort is probed once globally (_REASONING_EFFORT_SUPPORTED).
+    On first use it tries "minimal"; if Azure returns 400 the flag flips to
+    False and subsequent turns skip the param entirely (no double-call).
 
     Args:
         t0_stt_done: Optional perf_counter timestamp from the moment STT
                      completed (set by ws_bridge). Used for telemetry only.
+        turn_id:     Unique identifier for this turn, used to match TTS acks.
     """
+    global _REASONING_EFFORT_SUPPORTED  # noqa: PLW0603
+
     t_thinking = time.perf_counter()
     await send_ai_thinking(ws)
 
     api_key     = os.getenv("AZURE_OPENAI_API_KEY", "")
     endpoint    = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     deployment  = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5-mini")
-    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
 
     if not api_key or not endpoint:
         # Fallback: delegate to unary path
@@ -156,6 +228,8 @@ async def run_turn_streaming(
 
     ctx = record.context
     history = _session_history.get(session_id, [])
+    conversation_summary = _session_summary.get(session_id, "")
+    topic_anchor = _get_topic_anchor(session_id, ctx.outline)
     max_full_turns = int(os.getenv("FULL_CONTEXT_MAX_TURNS", "6"))
     use_full = ctx.use_full_context and ctx.full_context_turns_used < max_full_turns
     chat_mode = record.metadata.get("mode", "video_chat") if record.metadata else "video_chat"
@@ -193,56 +267,99 @@ async def run_turn_streaming(
         is_first_turn=is_first_turn,
         meta=meta,
         turn_count=turn_count,
+        cefr_level=ctx.outline.cefr_level,
+        conversation_summary=conversation_summary,
+        topic_anchor=topic_anchor,
     )
     messages = build_messages(system_prompt, history, user_text)
 
     client = AsyncAzureOpenAI(api_key=api_key, azure_endpoint=endpoint, api_version=api_version)
 
-    # ── Stream from Azure, flush on first sentence boundary ─────────────────────
+    # ── Stream from Azure via create(stream=True) + delta.content ───────────────
+    # We do NOT use client.chat.completions.stream() / stream.text_stream because
+    # that API does not exist in the SDK version deployed here.
     full_reply = ""
-    first_chunk_sent = False
     buffer = ""
+    sentence_count = 0
     t_first_token: float | None = None
 
-    try:
-        async with client.chat.completions.stream(
-            model=deployment,
-            messages=messages,  # type: ignore[arg-type]
-        ) as stream:
-            async for text in stream.text_stream:
-                if t_first_token is None:
-                    t_first_token = time.perf_counter()
-                buffer += text
-                full_reply += text
+    async def _do_stream(use_reasoning: bool) -> tuple[str, float | None, bool]:
+        """Run the streaming call. Returns (full_text, t_first_token, had_400)."""
+        _reply = ""
+        _buf = ""
+        _tfirst: float | None = None
+        _had_400 = False
+        _sent = 0  # sentences emitted so far
 
-                # Flush as soon as we hit a sentence boundary and haven't sent yet.
-                # This gives the frontend text to display (and TTS to start) early.
-                if not first_chunk_sent and _SENTENCE_BOUNDARY.search(buffer):
-                    await send_ai_speaking(ws, buffer.strip())
-                    first_chunk_sent = True
+        create_kwargs: dict = {"model": deployment, "messages": messages, "stream": True}
+        if use_reasoning:
+            create_kwargs["reasoning_effort"] = "minimal"
+
+        try:
+            stream = await client.chat.completions.create(**create_kwargs)  # type: ignore[arg-type]
+            async for chunk in stream:  # type: ignore[union-attr]
+                delta = chunk.choices[0].delta if chunk.choices else None
+                if delta is None:
+                    continue
+                text = delta.content or ""
+                if not text:
+                    continue
+                if _tfirst is None:
+                    _tfirst = time.perf_counter()
+                _reply += text
+                
+                # Stream the subtitle live to the frontend (transient)
+                await send_transcript_update(ws, _reply, is_final=False, sender="ai", turn_id=turn_id)
+
+        except Exception as exc:
+            err_str = str(exc)
+            if "400" in err_str or "reasoning_effort" in err_str.lower():
+                _had_400 = True
+            else:
+                raise
+
+        return _reply, _tfirst, _had_400
+
+    try:
+        # Decide whether to include reasoning_effort based on cached probe result.
+        # None = first call ever → try with it; True = known good; False = known bad.
+        attempt_reasoning = (_REASONING_EFFORT_SUPPORTED is not False)
+
+        raw_reply, t_first_token, had_400 = await _do_stream(use_reasoning=attempt_reasoning)
+
+        if had_400 and attempt_reasoning:
+            # Azure rejected reasoning_effort — cache the result and retry clean.
+            _REASONING_EFFORT_SUPPORTED = False
+            logger.warning(
+                "[ai_turn] reasoning_effort rejected (400) — disabling globally and retrying"
+            )
+            raw_reply, t_first_token, _ = await _do_stream(use_reasoning=False)
+        elif not had_400 and attempt_reasoning and _REASONING_EFFORT_SUPPORTED is None:
+            _REASONING_EFFORT_SUPPORTED = True
+            logger.info("[ai_turn] reasoning_effort=minimal confirmed supported")
+
+        full_reply = raw_reply.strip()
+
+        # ── Vietnamese safety guard ───────────────────────────────────────────
+        # If the model produced a Vietnamese reply despite the prompt rule, force
+        # one more generation with an explicit English-only system message.
+        full_reply = await _force_english_if_vietnamese(client, deployment, full_reply)
+
+        await send_ai_speaking(ws, full_reply, turn_id=turn_id)
 
     except Exception as exc:
         logger.warning("[ai_turn] Streaming failed (%s) — falling back to unary", exc)
         full_reply = await _generate_response(session_id, user_text, meta=meta) or _FALLBACK_MESSAGE
-        first_chunk_sent = False
+        # Unary path: emit once
+        await send_ai_speaking(ws, full_reply, turn_id=turn_id)
 
-    full_reply = full_reply.strip()
     if not full_reply:
         full_reply = _FALLBACK_MESSAGE
+        await send_ai_speaking(ws, full_reply, turn_id=turn_id)
 
-    # If we never found a sentence boundary, send the full reply now.
-    if not first_chunk_sent:
-        await send_ai_speaking(ws, full_reply)
+    await send_transcript_update(ws, full_reply, is_final=False, sender="ai", turn_id=turn_id)
 
-    await send_transcript_update(ws, full_reply, is_final=False, sender="ai")
-
-    # ── Update history ─────────────────────────────────────────────────────────
-    if session_id not in _session_history:
-        _session_history[session_id] = []
-    _session_history[session_id].append({"role": "user",      "content": user_text})
-    _session_history[session_id].append({"role": "assistant", "content": full_reply})
-    if len(_session_history[session_id]) > 8:   # keep 4 turns (Phase C)
-        _session_history[session_id] = _session_history[session_id][-8:]
+    # History update is deferred until TTS completion via commit_history().
 
     # ── Per-turn telemetry ───────────────────────────────────────────────────────
     t_end = time.perf_counter()
@@ -250,25 +367,103 @@ async def run_turn_streaming(
     t_ttft_ms  = round((t_first_token - t_thinking) * 1000) if t_first_token else None
     t_total_ms = round((t_end - (t0_stt_done or t_thinking)) * 1000)
     logger.info(
-        "[Perf] session=%s | STT→LLM=%s ms | TTFT=%s ms | total=%d ms | words=%d",
+        "[Perf] session=%s | STT→LLM=%s ms | TTFT=%s ms | total=%d ms | words=%d | reasoning_ok=%s",
         session_id,
         t_stt_ms if t_stt_ms is not None else "n/a",
         t_ttft_ms if t_ttft_ms is not None else "n/a",
         t_total_ms,
         len(full_reply.split()),
+        _REASONING_EFFORT_SUPPORTED,
     )
 
     return full_reply
 
 
-async def send_turn_final(ws: Any, response_text: str) -> None:
+async def send_turn_final(ws: Any, response_text: str, turn_id: str | None = None) -> None:
     """
     Commit the AI turn transcript as final.
 
     Called by ws_bridge when it receives a { type: "tts.done" } frame from
     the frontend, signalling that TTS audio playback has completed.
     """
-    await send_transcript_update(ws, response_text, is_final=True, sender="ai")
+    await send_transcript_update(ws, response_text, is_final=True, sender="ai", turn_id=turn_id)
+
+
+# ── Public History Commit ──────────────────────────────────────────────────────
+
+def commit_history(session_id: str, user_text: str, ai_text: str) -> None:
+    """
+    Commit a turn to the session history.
+    Called by ws_bridge ONLY when TTS acknowledges it played successfully.
+
+    When the verbatim window is full, the oldest turn rolls off and is folded
+    synchronously into _session_summary (buffer + summary model, zero overlap).
+    This is pure string work (~µs) — no async needed, no race conditions.
+    """
+    from context.prompt_builder import MAX_HISTORY_TURNS
+    max_messages = MAX_HISTORY_TURNS * 2  # 6 turns = 12 messages
+
+    if session_id not in _session_history:
+        _session_history[session_id] = []
+    _session_history[session_id].append({"role": "user",      "content": user_text})
+    _session_history[session_id].append({"role": "assistant", "content": ai_text})
+
+    if len(_session_history[session_id]) > max_messages:
+        # Oldest turn falls off the verbatim window → fold it into running summary
+        old_user = _session_history[session_id][0]["content"]
+        old_ai   = _session_history[session_id][1]["content"]
+        _roll_into_summary(session_id, old_user, old_ai)
+        _session_history[session_id] = _session_history[session_id][-max_messages:]
+
+    logger.info(
+        "[ai_turn] Committed turn to history for %s (history_len=%d)",
+        session_id, len(_session_history[session_id]),
+    )
+
+
+# ── Session Memory & Anchor Helpers ───────────────────────────────────────────
+
+def _roll_into_summary(session_id: str, user_text: str, ai_text: str) -> None:
+    """
+    Fold a rolled-off verbatim turn into the session's running summary.
+
+    Called synchronously inside commit_history (pure string ops, ~µs).
+    Only turns that fall OFF the verbatim window are summarised — the window
+    itself is already included in full via build_messages(). No overlap.
+    """
+    try:
+        new_line = f"- U: {user_text[:100].strip()} | A: {ai_text[:100].strip()}"
+        existing = _session_summary.get(session_id, "")
+        lines = [ln for ln in existing.split("\n") if ln.strip()] if existing else []
+        lines.append(new_line)
+        _session_summary[session_id] = "\n".join(lines[-10:])  # cap at 10 rolled turns
+    except Exception:
+        logger.warning("[ai_turn] _roll_into_summary failed for %s — skipping", session_id)
+
+
+def _extract_topic_anchor(summary_text: str, title: str = "") -> str:
+    """
+    Extract a 1-sentence topic anchor from the outline's summary text.
+    Fallback chain: summary_text → title → "" (empty → prompt_builder uses generic text).
+    """
+    if summary_text and summary_text.strip():
+        first_sent = re.split(r'(?<=[.!?])\s', summary_text.strip(), maxsplit=1)
+        candidate = first_sent[0][:150].strip()
+        if candidate:
+            return candidate
+    if title and title.strip():
+        return title.strip()[:150]
+    return ""
+
+
+def _get_topic_anchor(session_id: str, outline: Any) -> str:
+    """Return the cached topic anchor for this session, extracting it on first call."""
+    if session_id not in _session_topic_anchor:
+        title = getattr(outline, "title", "") or ""
+        _session_topic_anchor[session_id] = _extract_topic_anchor(
+            getattr(outline, "summary_text", "") or "", title
+        )
+    return _session_topic_anchor[session_id]
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
@@ -303,7 +498,7 @@ async def _grounded_response(session_id: str, user_text: str, meta: dict | None 
     api_key     = os.getenv("AZURE_OPENAI_API_KEY", "")
     endpoint    = os.getenv("AZURE_OPENAI_ENDPOINT", "")
     deployment  = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-5-mini")
-    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-02-01")
+    api_version = os.getenv("AZURE_OPENAI_API_VERSION", "2024-12-01-preview")
 
     if not api_key or not endpoint:
         return None
@@ -319,6 +514,8 @@ async def _grounded_response(session_id: str, user_text: str, meta: dict | None 
 
     ctx = record.context
     history = _session_history.get(session_id, [])
+    conversation_summary = _session_summary.get(session_id, "")
+    topic_anchor = _get_topic_anchor(session_id, ctx.outline)
 
     max_full_turns = int(os.getenv("FULL_CONTEXT_MAX_TURNS", "6"))
     use_full = ctx.use_full_context and ctx.full_context_turns_used < max_full_turns
@@ -389,6 +586,9 @@ async def _grounded_response(session_id: str, user_text: str, meta: dict | None 
         is_first_turn=is_first_turn,
         meta=meta,
         turn_count=turn_count,
+        cefr_level=ctx.outline.cefr_level,
+        conversation_summary=conversation_summary,
+        topic_anchor=topic_anchor,
     )
 
     messages = build_messages(system_prompt, history, user_text)
@@ -399,35 +599,48 @@ async def _grounded_response(session_id: str, user_text: str, meta: dict | None 
     # model default (1). Passing any explicit value — including 0.0 — causes a
     # 400 "unsupported_value" error. Omitting it is the correct behaviour per
     # Azure docs for these models.
+    #
+    # reasoning_effort: uses the globally-cached capability flag. If this is the
+    # first unary call and streaming hasn't probed yet, we try it here too.
+    # A 400 flips the flag False; subsequent calls skip it entirely.
+    global _REASONING_EFFORT_SUPPORTED  # noqa: PLW0603
+
     client = AsyncAzureOpenAI(
         api_key=api_key,
         azure_endpoint=endpoint,
         api_version=api_version,
     )
 
-    try:
-        completion = await client.chat.completions.create(
-            model=deployment,
-            messages=messages,  # type: ignore[arg-type]
-        )
-    except Exception:
-        raise
+    create_kwargs: dict = {"model": deployment, "messages": messages}  # type: ignore[arg-type]
+    if _REASONING_EFFORT_SUPPORTED is not False:
+        create_kwargs["reasoning_effort"] = "minimal"
 
-    reply = (completion.choices[0].message.content or "").strip()
+    try:
+        completion = await client.chat.completions.create(**create_kwargs)
+        if _REASONING_EFFORT_SUPPORTED is None:
+            _REASONING_EFFORT_SUPPORTED = True
+            logger.info("[ai_turn] reasoning_effort=minimal confirmed supported (unary path)")
+    except Exception as exc:
+        err_str = str(exc)
+        if ("400" in err_str or "reasoning_effort" in err_str.lower()) and _REASONING_EFFORT_SUPPORTED is not False:
+            _REASONING_EFFORT_SUPPORTED = False
+            logger.warning(
+                "[ai_turn] reasoning_effort rejected (400) on unary — disabling globally, retrying"
+            )
+            create_kwargs.pop("reasoning_effort", None)
+            completion = await client.chat.completions.create(**create_kwargs)
+        else:
+            raise
+
+    reply = (completion.choices[0].message.content or "").strip()  # type: ignore[union-attr]
     if not reply:
         return None
 
-    # ── Update conversation history ───────────────────────────────────────────
-    # Store only clean English user_text (never verbatim Vietnamese from meta).
-    # This keeps TF-IDF retrieval queries and future turn context noise-free.
-    if session_id not in _session_history:
-        _session_history[session_id] = []
-    _session_history[session_id].append({"role": "user",      "content": user_text})
-    _session_history[session_id].append({"role": "assistant", "content": reply})
+    # ── Vietnamese safety guard (unary path) ─────────────────────────────────
+    reply = await _force_english_if_vietnamese(client, deployment, reply)
 
-    # Trim to last 16 entries (= 8 turns)
-    if len(_session_history[session_id]) > 16:
-        _session_history[session_id] = _session_history[session_id][-16:]
+    # ── Update conversation history ───────────────────────────────────────────
+    # Removed auto-commit here. Handled by commit_history() on tts.done.
 
     logger.info(
         "[ai_turn] Azure reply | session=%s | deployment=%s | reply_chars=%d",

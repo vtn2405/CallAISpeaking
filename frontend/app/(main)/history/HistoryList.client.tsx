@@ -1,37 +1,15 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import Image from 'next/image';
 import Link from 'next/link';
-import { Plus, Clock, ChatCircleDots, Trash, DotsThree, YoutubeLogo } from '@phosphor-icons/react';
+import { Clock, ChatCircleDots, Trash, DotsThree, YoutubeLogo } from '@phosphor-icons/react';
 import { getAllSessions, deleteSession } from '@/lib/historyRepository';
-import { getOrCreateGuestId } from '@/lib/identity';
+import { getUserIdentity } from '@/lib/identity';
+import { formatDuration, statusLabel } from '@/lib/formatUtils';
 import type { ArchivedSession } from '@/types/history';
 
-function formatDuration(seconds: number): string {
-  if (seconds <= 0) return '0s';
-  const m = Math.floor(seconds / 60);
-  const s = seconds % 60;
-  if (m === 0) return `${s}s`;
-  if (s === 0) return `${m}m`;
-  return `${m}m ${s}s`;
-}
-
-function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString('vi-VN', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
-function statusLabel(status: ArchivedSession['status']): string | null {
-  if (status === 'abandoned') return 'Bị gián đoạn';
-  return null;
-}
-
-export default function HistoryPage() {
+export default function HistoryListClient() {
   const [sessions, setSessions] = useState<ArchivedSession[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -44,7 +22,7 @@ export default function HistoryPage() {
     let cancelled = false;
 
     async function load() {
-      const guestId = getOrCreateGuestId();
+      const guestId = await getUserIdentity();
       if (!guestId) {
         setLoading(false);
         return;
@@ -103,20 +81,7 @@ export default function HistoryPage() {
   };
 
   return (
-    <main className="p-8 lg:p-12 xl:p-16 flex flex-col gap-10 max-w-6xl mx-auto w-full min-w-0">
-      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex flex-col">
-          <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
-            Lịch sử trò chuyện
-          </h1>
-          <p className="text-[15px] text-zinc-500 mt-1">Toàn bộ lịch sử các cuộc gọi gần đây của bạn.</p>
-        </div>
-        <Link href="/" className="flex items-center gap-2 px-5 py-2.5 bg-primary-600 text-white font-bold rounded-xl hover:bg-primary-700 transition-colors shadow-sm shrink-0 w-fit">
-          <Plus weight="bold" size={16} />
-          <span>Cuộc trò chuyện mới</span>
-        </Link>
-      </header>
-
+    <>
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {[1, 2, 3].map((i) => (
@@ -155,10 +120,12 @@ export default function HistoryPage() {
                   {/* Thumbnail */}
                   <div className="w-full aspect-video rounded-2xl bg-surface-soft mb-4 overflow-hidden relative border border-hairline/50">
                     {s.video_id ? (
-                      <img
+                      <Image
                         src={`https://img.youtube.com/vi/${s.video_id}/0.jpg`}
                         alt=""
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                        fill
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                        className="object-cover group-hover:scale-105 transition-transform duration-500"
                       />
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center text-muted gap-2 bg-gradient-to-br from-zinc-800 to-zinc-900">
@@ -266,6 +233,6 @@ export default function HistoryPage() {
           </div>
         </div>
       )}
-    </main>
+    </>
   );
 }

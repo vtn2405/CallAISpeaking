@@ -17,7 +17,7 @@ interface CallFooterControlsProps {
 
 export default function CallFooterControls({ onEndCall }: CallFooterControlsProps) {
   return (
-    <footer className={styles.footer}>
+    <footer className={`${styles.footer} pb-[max(24px,env(safe-area-inset-bottom))]`}>
       <button
         id="end-call-btn"
         data-testid="end-call-button"

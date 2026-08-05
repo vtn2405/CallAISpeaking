@@ -77,3 +77,49 @@ export interface ArchivedMessage {
    */
   sequence: number;
 }
+
+/**
+ * A single word/phrase lookup event within a session.
+ * Stored in the `lookups` object store in IndexedDB.
+ * Each tap = one row; dedup and count are computed at query time via groupBy(term).
+ */
+export interface ArchivedLookupEvent {
+  /** UUID, generated per lookup tap. */
+  id: string;
+
+  /** Foreign key — links to ArchivedSession.id */
+  session_id: string;
+
+  /**
+   * Foreign key — links to ArchivedMessage.id.
+   * Used to re-render inline highlights in the transcript view.
+   */
+  message_id: string;
+
+  /**
+   * The canonical term as returned by the Gemini lookup.
+   * May be wider than the word the user tapped (collocation expansion).
+   */
+  term: string;
+
+  type: 'WORD' | 'COLLOCATION';
+
+  /** Contextual Vietnamese meaning. */
+  meaning_vi: string;
+
+  /** Vietnamese note about the collocation; empty string if type=WORD. */
+  collocation_note: string;
+
+  /** The full sentence text that was visible when the user tapped. */
+  original_sentence: string;
+
+  /**
+   * Byte offset of `term` within the original message text.
+   * null when Gemini could not locate the term in the sentence.
+   */
+  start_char: number | null;
+  end_char: number | null;
+
+  /** ISO 8601 string — when the lookup was performed. */
+  created_at: string;
+}

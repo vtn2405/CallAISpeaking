@@ -17,10 +17,26 @@ node_modules/
 
 # Excluded folders
 taste-skill/
-dashboard/node_modules/
+dashboard/
 *skill*/
 skills/
 
+# Playwright & TS caches
+playwright-report/
+screenshots/
+**/*.tsbuildinfo
+
 # Other ignored files
 *.docx
+ARCHITECTURE_REVIEW.md
+DESIGN.md
+phase1.md
+routes.md
+casetronlan.md
+ai-speaking-project-plan-phase1.md
+ai-speaking-project-plan-*.md
+extract.js
+generate_tts.js
+test_prompt.py
 ingestion_worker/
+

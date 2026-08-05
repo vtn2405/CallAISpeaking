@@ -11,8 +11,10 @@
  *   - NO business logic — session state and transcript mapping live in hooks
  */
 export interface PipecatTransport {
-  /** Start the transport connection, using the API-issued session identifier. */
-  connect(sessionId: string): void;
+  /** Start the transport connection, using the API-issued session identifier.
+   *  sessionToken, if provided, is sent as the first WS frame for authentication.
+   */
+  connect(sessionId: string, sessionToken?: string): void;
 
   /** Tear down the connection and cancel all pending work. */
   disconnect(): void;

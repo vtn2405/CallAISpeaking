@@ -44,6 +44,13 @@ def build_retrieval_query(
     Combine the last `lookback` history messages with the current user text
     to create a richer retrieval query that reflects conversation momentum.
 
+    Short/referential queries (≤4 words, e.g. "Why?", "Tell me more", "How?")
+    signal that the user is referring to something just said, not introducing a
+    new topic. In this case we boost the last AI turn explicitly so TF-IDF
+    anchors to the actual referent rather than a near-empty token.
+    Doubling the bare user token ("Why? Why?") would boost nothing meaningful
+    on TF-IDF — the AI context is the real signal.
+
     Args:
         user_text: Current user utterance.
         history:   Conversation history [{role, content}, ...] in OpenAI format.
@@ -54,6 +61,19 @@ def build_retrieval_query(
     """
     recent = history[-lookback:] if len(history) > lookback else history
     parts = [msg["content"] for msg in recent if msg.get("content")]
+
+    # For short/referential queries, surface the last AI turn explicitly so the
+    # retrieval anchors to what the user is actually referring to.
+    user_words = user_text.split()
+    if len(user_words) <= 4 and history:
+        last_ai = next(
+            (m["content"] for m in reversed(history) if m.get("role") == "assistant"),
+            "",
+        )
+        # Only add if not already present in the lookback window
+        if last_ai and last_ai not in parts:
+            parts.append(last_ai)
+
     parts.append(user_text)
     return " ".join(parts)
 

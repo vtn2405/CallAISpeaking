@@ -46,15 +46,15 @@ export function useTranscript() {
   /** Full live AI text split into words for highlight rendering. */
   const liveWordsRef = useRef<string[]>([]);
 
-  const appendMessage = useCallback((sender: 'user' | 'ai', text: string) => {
-    setMessages((prev) => [...prev, { id: makeId(), sender, text, time: getTime() }]);
+  const appendMessage = useCallback((sender: 'user' | 'ai', text: string, id?: string) => {
+    setMessages((prev) => [...prev, { id: id || makeId(), sender, text, time: getTime() }]);
   }, []);
 
   /**
    * Called by the parent for every transcript.update event.
    */
   const updateLiveSubtitle = useCallback(
-    (text: string, isFinal: boolean, sender: 'user' | 'ai') => {
+    (text: string, isFinal: boolean, sender: 'user' | 'ai', id?: string) => {
       if (isFinal) {
         if (sender === 'ai') {
           setLiveSubtitle(null);
@@ -64,7 +64,7 @@ export function useTranscript() {
         } else {
           setLiveUserSubtitle(null);
         }
-        setMessages((prev) => [...prev, { id: makeId(), sender, text, time: getTime() }]);
+        setMessages((prev) => [...prev, { id: id || makeId(), sender, text, time: getTime() }]);
       } else {
         if (sender === 'ai') {
           setLiveSubtitle(text);

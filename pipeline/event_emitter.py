@@ -4,9 +4,9 @@ event_emitter.py — formats and sends the 6 Pipecat realtime events over a WebS
 Contract (mirrors frontend types/call.ts PipecatRealtimeEvent union):
 
   session.ready      { type, sessionId, metadata: { title, duration, thumbnailUrl? } }
-  transcript.update  { type, text, isFinal, sender: "user"|"ai" }
+  transcript.update  { type, text, isFinal, sender: "user"|"ai", turnId? }
   ai.thinking        { type }
-  ai.speaking        { type, text }
+  ai.speaking        { type, text, turnId? }
   session.ended      { type }
   error              { type, message, code? }
 
@@ -44,21 +44,28 @@ async def send_transcript_update(
     text: str,
     is_final: bool,
     sender: str,          # "user" | "ai"
+    turn_id: str | None = None,
 ) -> None:
-    await _send(ws, {
+    payload = {
         "type":    "transcript.update",
         "text":    text,
         "isFinal": is_final,
         "sender":  sender,
-    })
+    }
+    if turn_id:
+        payload["turnId"] = turn_id
+    await _send(ws, payload)
 
 
 async def send_ai_thinking(ws: Any) -> None:
     await _send(ws, {"type": "ai.thinking"})
 
 
-async def send_ai_speaking(ws: Any, text: str) -> None:
-    await _send(ws, {"type": "ai.speaking", "text": text})
+async def send_ai_speaking(ws: Any, text: str, turn_id: str | None = None) -> None:
+    payload = {"type": "ai.speaking", "text": text}
+    if turn_id:
+        payload["turnId"] = turn_id
+    await _send(ws, payload)
 
 
 async def send_session_ended(ws: Any) -> None:

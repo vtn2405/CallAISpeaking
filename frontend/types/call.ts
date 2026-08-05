@@ -1,6 +1,7 @@
 // ─── Session lifecycle ─────────────────────────────────────────────────────────
 export type CallSessionState =
   | 'initializing'      // Fetching video context / awaiting session.ready
+  | 'countdown'         // 3-2-1 ritual before AI speaks
   | 'idle'              // Ready, waiting for user
   | 'listening'         // Mic is hot, MediaRecorder is capturing chunks
   | 'recording'         // Audio data is actively being recorded (can be same as listening)
@@ -24,6 +25,43 @@ export interface Message {
   time: string;
 }
 
+// ─── Beginner helper types ─────────────────────────────────────────────────────
+
+/** One response idea returned by the hints API. */
+export interface HintSuggestion {
+  type: 'answer' | 'question' | 'reaction';
+  /** A1–A2 English suggestion text. */
+  en: string;
+  /** Vietnamese translation. */
+  vi: string;
+}
+
+/**
+ * Full result from POST /api/sessions/[id]/hints.
+ * Feeds BOTH "Tôi nên nói gì?" and "Câu đó nghĩa là gì?" buttons from ONE call.
+ */
+export interface HintResult {
+  /** Vietnamese explanation of what the AI just said. */
+  sentence_vi: string;
+  suggestions: HintSuggestion[];
+}
+
+/**
+ * Full result from POST /api/lookup.
+ * term may be wider than the word the user tapped (collocation expansion).
+ * startChar/endChar are offsets into the originalSentence string —
+ * use these (NOT the tapped word) for inline highlight rendering.
+ */
+export interface LookupResult {
+  term: string;
+  type: 'WORD' | 'COLLOCATION';
+  meaning_vi: string;
+  collocation_note: string;
+  startChar: number | null;
+  endChar: number | null;
+  is_offline?: boolean;
+}
+
 // ─── REST API contracts ────────────────────────────────────────────────────────
 
 /** POST /api/sessions/init request body */
@@ -36,12 +74,15 @@ export interface SessionInitRequest {
 /** POST /api/sessions/init response */
 export interface SessionInitResponse {
   sessionId: string;
+  /** One-time WS auth token. Sent as the first WS frame { type: "auth", token }. */
+  sessionToken?: string;
   status: 'processing' | 'ready';
   metadata: {
     title: string;
     channelName?: string;
     duration?: number;       // seconds
     thumbnailUrl?: string;
+    mode?: 'video_chat' | 'beginner';
   };
 }
 
@@ -73,6 +114,7 @@ export interface TranscriptUpdateEvent {
   text: string;
   isFinal: boolean;
   sender: 'user' | 'ai';
+  turn_id?: string;
 }
 
 export interface AiThinkingEvent {
@@ -129,6 +171,8 @@ export interface SpeechNormalizationResult {
     /** True when verbatim_text !== normalized_english — UI shows "AI hiểu là" label. */
     normalization_applied: boolean;
     asr_correction_applied?: boolean;
+    /** Low-confidence signal: true when STT used fallback/translation path. */
+    stt_low_confidence?: boolean;
     turn_handling_mode?: string;
     user_intent?: string;
     embedded_phrase_source?: string;

@@ -16,6 +16,11 @@ enum SessionStatus {
   ERROR
 }
 
+enum LookupType {
+  WORD
+  COLLOCATION
+}
+
 enum MessageRole {
   USER
   ASSISTANT
@@ -38,6 +43,7 @@ model Video {
   title        String?
   durationSec  Int?
   hasSubtitle  Boolean   @default(false)
+  cefrLevel    String?   // "A1" | "A2" | "B1" | "B2" | "C1" | "C2" — estimated by Gemini at ingest
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   sessions     Session[]
@@ -82,21 +88,48 @@ model Session {
   user            User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
   video           Video          @relation(fields: [videoId], references: [id], onDelete: Cascade)
   messages        Message[]
+  lookupEvents    LookupEvent[]  // back-relation — required by Prisma
 
   @@index([userId, createdAt])
   @@index([videoId, createdAt])
 }
 
 model Message {
-  id              String      @id @default(cuid())
+  id              String         @id @default(cuid())
   sessionId       String
   role            MessageRole
   content         String
   audioUrl        String?
   sttText         String?
   ttsText         String?
-  createdAt       DateTime    @default(now())
-  session         Session     @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now())
+  session         Session        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  lookupEvents    LookupEvent[]  // back-relation — required by Prisma
 
   @@index([sessionId, createdAt])
+}
+
+// ── Word Lookup Event Log ────────────────────────────────────────────────────
+// Each tap on a word/phrase in the subtitle rail creates ONE row.
+// dedup + counting done at query time via GROUP BY term.
+// startChar/endChar are byte-offsets into Message.content (the full message text)
+// so the UI can highlight the exact span without substring-match ambiguity.
+model LookupEvent {
+  id               String     @id @default(cuid())
+  sessionId        String
+  messageId        String     // real relation to Message — required for inline highlight + RI
+  term             String     // the word or collocation as returned by Gemini (may be wider than tapped word)
+  type             LookupType
+  meaningVi        String
+  originalSentence String     // full sentence text at time of tap
+  startChar        Int?       // offset into Message.content where term begins
+  endChar          Int?       // offset into Message.content where term ends (exclusive)
+  userId           String?    // future: cross-session vocabulary library
+  createdAt        DateTime   @default(now())
+
+  session          Session    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  message          Message    @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([userId, term])
 }

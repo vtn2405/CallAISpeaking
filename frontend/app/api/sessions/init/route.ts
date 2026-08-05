@@ -22,7 +22,12 @@ export async function POST(req: NextRequest) {
 
   const videoUrl  = body.videoUrl ?? '';
   const mode      = body.mode === 'beginner' ? 'beginner' : 'video_chat';
-  const sessionId = `sess-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const sessionId    = crypto.randomUUID();  // 128-bit entropy (was Math.random ~25-bit)
+  const sessionToken = crypto.randomUUID();  // WS auth token — single-use, 5-min TTL
+  // Token expires 5 minutes after session init — generous window for the initial WS
+  // connect while preventing indefinite token validity. Reconnect flows will need
+  // a dedicated /api/sessions/{id}/token/refresh endpoint (future work).
+  const sessionTokenExpiresAt = Date.now() + 5 * 60 * 1000;
 
   // Derive a display title and channel from the YouTube URL
   let title = 'Video speaking session';
@@ -54,6 +59,11 @@ export async function POST(req: NextRequest) {
     duration: 900,           // 15 min placeholder; real backend provides actual value
     thumbnailUrl: undefined as string | undefined,
     mode,                    // "video_chat" | "beginner" — read by ai_turn.py
+    // sessionToken and sessionTokenExpiresAt are forwarded to the pipeline's session
+    // record for WS auth. They are intentionally NOT included in the browser response
+    // metadata — only the top-level sessionToken field is returned to the browser.
+    sessionToken,
+    sessionTokenExpiresAt,
   };
 
   // ── Pre-register with Python WS shim ─────────────────────────────────────
@@ -62,9 +72,13 @@ export async function POST(req: NextRequest) {
   // If the shim is unreachable, log and continue — browser will get a WS error.
   if (SHIM_URL) {
     try {
+      const pipelineSecret = process.env.PIPELINE_SECRET || 'dev-pipeline-secret';
       const res = await fetch(`${SHIM_URL}/api/sessions/register`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${pipelineSecret}`,
+        },
         body: JSON.stringify({ sessionId, videoUrl, metadata }),
       });
       
@@ -84,8 +98,15 @@ export async function POST(req: NextRequest) {
 
   const response: SessionInitResponse = {
     sessionId,
+    sessionToken,           // browser stores this and sends it as the first WS frame
     status: 'processing',   // becomes 'ready' only after WS session.ready fires
-    metadata,
+    metadata: {
+      title,
+      channelName,
+      duration: 900,
+      thumbnailUrl: undefined,
+      mode,
+    },
   };
 
   return NextResponse.json(response, { status: 200 });

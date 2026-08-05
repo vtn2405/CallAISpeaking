@@ -10,6 +10,8 @@ import type {
   SessionInitResponse,
   SessionEndRequest,
   SessionEndResponse,
+  HintResult,
+  LookupResult,
 } from '@/types/call';
 
 const API_BASE =
@@ -56,4 +58,48 @@ export async function endSession(
     body: JSON.stringify(body),
   });
   return handleResponse<SessionEndResponse>(res);
+}
+
+/**
+ * Lazily fetch beginner hints for the most recent AI turn.
+ * POST /api/sessions/:id/hints
+ *
+ * Call this only when the user explicitly taps "Tôi nên nói gì?" or
+ * "Câu đó nghĩa là gì?". Cache the result for one AI turn — both buttons
+ * read from the SAME response (one Gemini call per turn).
+ */
+export async function fetchHints(
+  sessionId: string,
+  aiSentence: string,
+  mode: string = 'beginner',
+): Promise<HintResult> {
+  const res = await fetch(`${API_BASE}/api/sessions/${sessionId}/hints`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ aiSentence, mode }),
+  });
+  return handleResponse<HintResult>(res);
+}
+
+/**
+ * Look up contextual meaning of a tapped word/phrase in the subtitle rail.
+ * POST /api/lookup
+ *
+ * Available in both Beginner and Video Chat modes when subtitles are visible.
+ * The returned `term` and `startChar`/`endChar` must be used for highlighting
+ * — NOT the original tapped string (Gemini may expand to a collocation).
+ */
+export async function fetchWordLookup(
+  sessionId: string,
+  messageId: string,
+  tappedTerm: string,
+  originalSentence: string,
+  forceLlm: boolean = false
+): Promise<LookupResult> {
+  const res = await fetch(`${API_BASE}/api/lookup`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId, messageId, tappedTerm, originalSentence, forceLlm }),
+  });
+  return handleResponse<LookupResult>(res);
 }

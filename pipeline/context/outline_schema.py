@@ -55,6 +55,10 @@ class VideoOutline(BaseModel):
         description="A natural language, 4-10 word title summarizing the lesson or specific situation. No technical brackets, marketing hype, or generic terms."
     )
     summary_text: str
+    cefr_level: str = Field(
+        default="",
+        description="Estimated CEFR difficulty level of the video language (A1, A2, B1, B2, C1, C2). Empty string if unknown or not yet estimated."
+    )
     parts: list[OutlinePart] = Field(default_factory=list)
     characters: list[Character] = Field(default_factory=list)
     key_events: list[KeyEvent] = Field(default_factory=list)

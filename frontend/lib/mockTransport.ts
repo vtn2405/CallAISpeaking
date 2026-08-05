@@ -45,6 +45,7 @@ export class MockTransport implements PipecatTransport {
   private listeners = new Map<string, Set<(data: unknown) => void>>();
   private timers: ReturnType<typeof setTimeout>[] = [];
   private connected = false;
+  private _preSynthesizedGreeting: string = '';
 
   /** Optional video title injected by transportFactory for greeting personalisation */
   videoTitle: string = 'Video Session';
@@ -67,45 +68,9 @@ export class MockTransport implements PipecatTransport {
         },
       } satisfies PipecatRealtimeEvent);
 
-      // After session is ready, fire the AI greeting (natural, video-aware).
-      // Small delay so the UI has time to transition to 'idle' first.
-      this._schedule(600, () => {
-        const greeting = buildGreeting(this.videoTitle);
-        this._emit('ai.thinking', { type: 'ai.thinking' } satisfies PipecatRealtimeEvent);
-
-        this._schedule(900, () => {
-          this._emit('ai.speaking', {
-            type: 'ai.speaking',
-            text: greeting,
-          } satisfies PipecatRealtimeEvent);
-
-          // Stream greeting as subtitle
-          this._emit('transcript.update', {
-            type: 'transcript.update',
-            text: greeting,
-            isFinal: false,
-            sender: 'ai',
-          } satisfies PipecatRealtimeEvent);
-
-          // Commit greeting to transcript after "speaking" duration
-          const speakMs = 1000 + greeting.length * 30;
-          this._schedule(speakMs, () => {
-            this._emit('transcript.update', {
-              type: 'transcript.update',
-              text: greeting,
-              isFinal: true,
-              sender: 'ai',
-            } satisfies PipecatRealtimeEvent);
-
-            // Signal AI done → transition back to idle
-            this._emit('session.ready', {
-              type: 'session.ready',
-              sessionId: '__ai_done__',
-              metadata: { title: '', duration: 0 },
-            } satisfies PipecatRealtimeEvent);
-          });
-        });
-      });
+      // Pre-warm / pre-synthesize the greeting during the 3-2-1 countdown.
+      // We will actually emit it when the client sends { type: 'start_call' }.
+      this._preSynthesizedGreeting = buildGreeting(this.videoTitle);
     });
   }
 
@@ -124,6 +89,43 @@ export class MockTransport implements PipecatTransport {
 
   off(event: string, handler: (data: unknown) => void): void {
     this.listeners.get(event)?.delete(handler);
+  }
+
+  send(frame: any): void {
+    if (frame.type === 'start_call') {
+      const greeting = this._preSynthesizedGreeting || buildGreeting(this.videoTitle);
+      
+      this._emit('ai.speaking', {
+        type: 'ai.speaking',
+        text: greeting,
+      } satisfies PipecatRealtimeEvent);
+
+      // Stream greeting as subtitle
+      this._emit('transcript.update', {
+        type: 'transcript.update',
+        text: greeting,
+        isFinal: false,
+        sender: 'ai',
+      } satisfies PipecatRealtimeEvent);
+
+      // Commit greeting to transcript after "speaking" duration
+      const speakMs = 1000 + greeting.length * 30;
+      this._schedule(speakMs, () => {
+        this._emit('transcript.update', {
+          type: 'transcript.update',
+          text: greeting,
+          isFinal: true,
+          sender: 'ai',
+        } satisfies PipecatRealtimeEvent);
+
+        // Signal AI done → transition back to idle
+        this._emit('session.ready', {
+          type: 'session.ready',
+          sessionId: '__ai_done__',
+          metadata: { title: '', duration: 0 },
+        } satisfies PipecatRealtimeEvent);
+      });
+    }
   }
 
   // ── Mock-only API (called by useVoiceClient to simulate user speech) ───────

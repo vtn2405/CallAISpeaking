@@ -12,16 +12,18 @@
  *    degrade gracefully and log a warning.
  *
  * Public API:
- *   createSessionDraft(opts)        → Call this when a call starts. Returns sessionId.
- *   appendMessage(sessionId, msg)   → Call this after each STT turn + each AI reply.
- *   completeSession(sessionId, opts)→ Call this when endSession is confirmed.
- *   abandonSession(sessionId)       → Call this on beforeunload / crash path.
- *   getRecentSessions(guestId, n)   → Used by "Trò chuyện gần đây" list.
- *   getSessionMessages(sessionId)   → Used by the transcript viewer (read-only).
+ *   createSessionDraft(opts)           → Call this when a call starts. Returns sessionId.
+ *   appendMessage(sessionId, msg)      → Call this after each STT turn + each AI reply.
+ *   appendLookupEvent(sessionId, evt)  → Call this after each word tap lookup.
+ *   completeSession(sessionId, opts)   → Call this when endSession is confirmed.
+ *   abandonSession(sessionId)          → Call this on beforeunload / crash path.
+ *   getRecentSessions(guestId, n)      → Used by "Trò chuyện gần đây" list.
+ *   getSessionMessages(sessionId)      → Used by the transcript viewer (read-only).
+ *   getLookupsBySession(sessionId)     → Used by the vocabulary panel (read-only).
  */
 
 import { getDb } from './db';
-import type { ArchivedSession, ArchivedMessage } from '@/types/history';
+import type { ArchivedSession, ArchivedMessage, ArchivedLookupEvent } from '@/types/history';
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
@@ -104,6 +106,7 @@ export async function createSessionDraft(opts: CreateSessionDraftOptions): Promi
 }
 
 export interface AppendMessageOptions {
+  id?: string;
   role: 'user' | 'ai';
   content: string;
   /** Sequence number within this session. Caller is responsible for incrementing. */
@@ -125,7 +128,7 @@ export async function appendMessage(
 
   const timestamp = now();
   const message: ArchivedMessage = {
-    id: uuid(),
+    id: opts.id || uuid(),
     session_id: sessionId,
     role: opts.role,
     content: opts.content,
@@ -238,6 +241,58 @@ export async function deleteSession(sessionId: string): Promise<void> {
   }
 }
 
+/**
+ * Permanently deletes all sessions and their messages for a specific guest/user.
+ * Also clears lookups for those sessions.
+ */
+export async function clearAllHistory(guestId: string): Promise<void> {
+  const db = await safeDb();
+  if (!db) return;
+
+  try {
+    // 1. Get all sessions for this guest
+    const sessions = await db.getAllFromIndex('sessions', 'by_guest_id', guestId);
+    if (sessions.length === 0) return;
+
+    const sessionIds = sessions.map(s => s.id);
+    
+    // 2. Start a transaction for all relevant stores
+    const tx = db.transaction(['sessions', 'messages', 'lookups'], 'readwrite');
+    
+    // 3. Delete sessions
+    for (const id of sessionIds) {
+      await tx.objectStore('sessions').delete(id);
+    }
+    
+    // 4. Delete messages by session_id
+    const messagesStore = tx.objectStore('messages');
+    const msgIndex = messagesStore.index('by_session_id');
+    for (const id of sessionIds) {
+      let cursor = await msgIndex.openCursor(id);
+      while (cursor) {
+        await cursor.delete();
+        cursor = await cursor.continue();
+      }
+    }
+    
+    // 5. Delete lookups by session_id
+    const lookupsStore = tx.objectStore('lookups');
+    const lookupIndex = lookupsStore.index('by_session_id');
+    for (const id of sessionIds) {
+      let cursor = await lookupIndex.openCursor(id);
+      while (cursor) {
+        await cursor.delete();
+        cursor = await cursor.continue();
+      }
+    }
+    
+    await tx.done;
+  } catch (err) {
+    console.warn('[historyRepository] clearAllHistory failed:', err);
+    throw err;
+  }
+}
+
 // ── Read API ──────────────────────────────────────────────────────────────────
 
 /**
@@ -302,5 +357,102 @@ export async function getSessionMessages(sessionId: string): Promise<ArchivedMes
   } catch (err) {
     console.warn('[historyRepository] getSessionMessages failed:', err);
     return [];
+  }
+}
+
+// ── Lookup Write API ──────────────────────────────────────────────────────────
+
+export interface AppendLookupOptions {
+  message_id: string;
+  term: string;
+  type: 'WORD' | 'COLLOCATION';
+  meaning_vi: string;
+  collocation_note: string;
+  original_sentence: string;
+  start_char: number | null;
+  end_char: number | null;
+}
+
+/**
+ * Appends a single lookup event (one tap = one row).
+ * Dedup / count-by-term is performed at query time in getLookupsBySession().
+ * Never throws — storage failures are logged and ignored.
+ */
+export async function appendLookupEvent(
+  sessionId: string,
+  opts: AppendLookupOptions,
+): Promise<void> {
+  const db = await safeDb();
+  if (!db) return;
+
+  const event: ArchivedLookupEvent = {
+    id: uuid(),
+    session_id: sessionId,
+    message_id: opts.message_id,
+    term: opts.term,
+    type: opts.type,
+    meaning_vi: opts.meaning_vi,
+    collocation_note: opts.collocation_note,
+    original_sentence: opts.original_sentence,
+    start_char: opts.start_char,
+    end_char: opts.end_char,
+    created_at: now(),
+  };
+
+  try {
+    await db.put('lookups', event);
+  } catch (err) {
+    console.warn('[historyRepository] appendLookupEvent failed:', err);
+  }
+}
+
+// ── Lookup Read API ──────────────────────────────────────────────────────────
+
+/**
+ * Returns all lookup events for a session, sorted by created_at descending.
+ *
+ * Callers derive two views from this single list:
+ *   1. Inline highlights: group by message_id, render highlighted spans.
+ *   2. Vocabulary panel: group by term (case-insensitive), count frequency,
+ *      show last meaning_vi per term.
+ */
+export async function getLookupsBySession(
+  sessionId: string,
+): Promise<ArchivedLookupEvent[]> {
+  const db = await safeDb();
+  if (!db) return [];
+
+  try {
+    const events = await db.getAllFromIndex('lookups', 'by_session_id', sessionId);
+    return events.sort((a, b) => b.created_at.localeCompare(a.created_at));
+  } catch (err) {
+    console.warn('[historyRepository] getLookupsBySession failed:', err);
+    return [];
+  }
+}
+
+// ── Migration API ─────────────────────────────────────────────────────────────
+
+/**
+ * Migrates all sessions from a guest ID to an authenticated user ID.
+ * Call this on successful login or registration.
+ */
+export async function migrateGuestToUser(guestId: string, userId: string): Promise<void> {
+  const db = await safeDb();
+  if (!db) return;
+
+  try {
+    const sessions = await db.getAllFromIndex('sessions', 'by_guest_id', guestId);
+    if (sessions.length === 0) return;
+
+    const tx = db.transaction('sessions', 'readwrite');
+    for (const session of sessions) {
+      session.guest_id = userId;
+      session.updated_at = now();
+      await tx.store.put(session);
+    }
+    await tx.done;
+  } catch (err) {
+    console.warn('[historyRepository] migrateGuestToUser failed:', err);
   }
 }
