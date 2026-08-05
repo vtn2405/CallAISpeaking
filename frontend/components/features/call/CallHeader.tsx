@@ -14,7 +14,7 @@ export default function CallHeader({ timer, micState, onToggleMute, onEndCall }:
 
   return (
     <div className={styles.callHeader}>
-      <button type="button" className={styles.backBtn} onClick={() => router.push('/')}>
+      <button type="button" className={styles.backBtn} onClick={() => router.push('/dashboard')}>
         <svg width="18" height="18" fill="none" viewBox="0 0 24 24">
           <path d="M19 12H5M12 5l-7 7 7 7" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>

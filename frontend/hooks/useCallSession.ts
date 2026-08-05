@@ -11,7 +11,7 @@ import {
   completeSession,
   abandonSession,
 } from '@/lib/historyRepository';
-import { getOrCreateGuestId } from '@/lib/identity';
+import { getUserIdentity } from '@/lib/identity';
 import type { MockTransport } from '@/lib/mockTransport';
 import type {
   CallSessionState,
@@ -51,6 +51,7 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
   // ── Single source of truth ──────────────────────────────────────────────────
   const [sessionState, setSessionState] = useState<CallSessionState>('initializing');
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [metadata, setMetadata] = useState<SessionInitResponse['metadata'] | null>(null);
   const [initError, setInitError] = useState<string | null>(null);
 
@@ -81,11 +82,11 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
 
   // ── Archive: append message per turn ────────────────────────────────────────
   // Defined before handleTranscriptEvent because the transcript handler references it.
-  const archiveMessage = useCallback(async (role: 'user' | 'ai', content: string) => {
+  const archiveMessage = useCallback(async (role: 'user' | 'ai', content: string, id?: string) => {
     const archiveId = archiveSessionIdRef.current;
     if (!archiveId || !content.trim()) return;
     const sequence = messageSequenceRef.current++;
-    await archiveAppendMessage(archiveId, { role, content, sequence });
+    await archiveAppendMessage(archiveId, { id, role, content, sequence });
   }, []);
 
   // ── Transcript event handler (stable ref) ───────────────────────────────────
@@ -93,10 +94,10 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
     (event: PipecatRealtimeEvent) => {
       if (event.type === 'transcript.update') {
         const e = event as TranscriptUpdateEvent;
-        updateLiveSubtitle(e.text, e.isFinal, e.sender);
+        updateLiveSubtitle(e.text, e.isFinal, e.sender, e.turn_id);
         // Archive final turns only — live partial transcripts are not persisted.
         if (e.isFinal && e.text.trim()) {
-          archiveMessage(e.sender, e.text.trim());
+          archiveMessage(e.sender, e.text.trim(), e.turn_id);
         }
       }
       // ai.speaking text is already handled via transcript.update from the mock;
@@ -109,6 +110,7 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
   const { isMuted, startListening, stopListening, toggleMute, sendPrompt } = useVoiceClient({
     transport,
     sessionId,
+    sessionToken,
     onSessionStateChange: setSessionState,
     onTranscriptEvent: handleTranscriptEvent,
     onNormalizationResult,
@@ -157,6 +159,7 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
       .then(async (res) => {
         if (cancelled) return;
         setSessionId(res.sessionId);
+        setSessionToken(res.sessionToken ?? null);
         setMetadata(res.metadata);
 
         // Pass the video title to MockTransport so it can craft a personalized greeting.
@@ -170,7 +173,7 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
         // Created here (not at component mount) because we need the video title.
         // If already created (StrictMode double-fire), skip.
         if (!archiveSessionIdRef.current) {
-          const guestId = getOrCreateGuestId() ?? 'guest';
+          const guestId = await getUserIdentity() ?? 'guest';
           
           let extractedVideoId: string | undefined;
           if (videoUrl) {
@@ -308,5 +311,11 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
     // Note: handleSendPrompt intentionally omitted — new voice-first UI
     // does not auto-send text. FluencyBooster hints are visual-only.
     endSession: handleEndSession,
+
+    // Session IDs
+    /** The Pipecat/Python WS session ID — used for REST API calls (hints, lookup). */
+    wsSessionId: sessionId,
+    /** The IndexedDB archive session ID — used for local lookup event persistence. */
+    idbSessionId: archiveSessionIdRef.current,
   };
 }

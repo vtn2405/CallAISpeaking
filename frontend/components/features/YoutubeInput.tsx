@@ -63,10 +63,11 @@ export default function YoutubeInput() {
   const [currentTitle, setCurrentTitle] = useState('');
   const [currentSub, setCurrentSub] = useState('');
   const [pasted, setPasted] = useState(false);
+  const [previewVideo, setPreviewVideo] = useState<{ videoId: string; title: string; author: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const abortRef = useRef(false);
 
-  const handleSubmit = useCallback(async () => {
+  const handlePrepare = useCallback(async () => {
     const trimmed = url.trim();
     if (!trimmed) {
       inputRef.current?.focus();
@@ -80,9 +81,11 @@ export default function YoutubeInput() {
 
     abortRef.current = false;
     setProcessing(true);
+    setCurrentTitle('Đang kiểm tra link...');
+    setCurrentSub('Kết nối tới YouTube');
 
     try {
-      // 1. Verify video validity first (just checks if video exists via oembed)
+      // 1. Verify video validity and fetch title
       const verifyRes = await fetch('/api/videos/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -96,71 +99,61 @@ export default function YoutubeInput() {
         return;
       }
 
-      // 2. Start Ingestion Job
-      setCurrentTitle('Đang khởi tạo...');
-      setCurrentSub('Bắt đầu tải dữ liệu video');
+      const { videoId, title, author } = await verifyRes.json();
       
-      const videoId = extractYouTubeId(trimmed) || '';
-      
-      // In a real app, this would hit Next.js /api/ingest which proxies to Azure worker
-      // For MVP we assume the route exists and returns { job_id }
-      const ingestRes = await fetch('/api/ingest', {
+      // 2. Fire and forget prefetch
+      fetch('/api/sessions/prefetch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ video_id: videoId, language_preference: 'en' }),
-      }).catch(() => null); // Ignore fetch errors for MVP fallback if route doesn't exist yet
-      
-      let isReady = false;
-      
-      if (ingestRes && ingestRes.ok) {
-        const { job_id } = await ingestRes.json();
-        
-        // 3. Poll for status — stable schema from Pipeline Facade:
-        //    { status: "queued"|"processing"|"completed"|"failed", progress: 0-100, error_code }
-        for (let i = 0; i < 45; i++) {
-          if (abortRef.current) return;
-          
-          const statusRes = await fetch(`/api/ingest/${job_id}`);
-          if (statusRes.ok) {
-            const statusData = await statusRes.json();
+        body: JSON.stringify({ videoUrl: trimmed }),
+      }).catch(console.error);
 
-            // Update progress sub-text
-            if (statusData.progress !== undefined) {
-              if (statusData.progress < 20) {
-                setCurrentTitle('Đang chuẩn bị video...');
-                setCurrentSub('Kết nối tới YouTube và trích xuất transcript');
-              } else if (statusData.progress < 80) {
-                setCurrentTitle('Video đang được xử lý...');
-                setCurrentSub('Quá trình này có thể mất đến 60s nếu cần nhận dạng giọng nói tự động (ASR).');
-              }
-            }
+      // Show preview
+      setPreviewVideo({ videoId, title: title || 'Video không tên', author: author || 'Unknown' });
+      setProcessing(false);
 
-            if (statusData.status === 'completed') {
-              isReady = true;
-              break;
-            } else if (statusData.status === 'failed') {
-              const errorCode = statusData.error_code;
-              if (errorCode === 'TRANSCRIPT_NOT_AVAILABLE') {
-                throw new Error('VIDEO_HAS_NO_CAPTIONS');
-              }
-              throw new Error('TRANSCRIPT_PROVIDER_DOWN');
-            }
+    } catch (err: any) {
+      setProcessing(false);
+      setErrorMsg('Lỗi kết nối. Vui lòng thử lại.');
+    }
+  }, [url]);
+
+  const handleStart = useCallback(async () => {
+    const trimmed = url.trim();
+    abortRef.current = false;
+    setProcessing(true);
+    setCurrentTitle('Đang chuẩn bị dữ liệu...');
+    setCurrentSub('AI đang đọc phụ đề, quá trình này mất khoảng 5-15s');
+
+    try {
+      // Start a simulated progress updater
+      let progressTimer: NodeJS.Timeout;
+      const startProgress = () => {
+        let step = 0;
+        progressTimer = setInterval(() => {
+          if (abortRef.current) return clearInterval(progressTimer);
+          step++;
+          if (step === 1) {
+            setCurrentTitle('Đang xử lý nội dung...');
+            setCurrentSub('Đang chia nhỏ và phân tích các đoạn hội thoại');
+          } else if (step === 3) {
+            setCurrentTitle('Đang tóm tắt...');
+            setCurrentSub('AI đang tóm tắt nội dung video');
+          } else if (step === 5) {
+            setCurrentTitle('Sắp xong...');
+            setCurrentSub('Đang hoàn thiện ngữ cảnh');
           }
-          
-          await delay(2000);
-        }
-        if (!isReady) throw new Error('Timeout waiting for video preparation');
-      } else {
-         // Fallback if API doesn't exist yet (for dev environment)
-         await delay(1500);
-      }
+        }, 4000);
+      };
+      
+      startProgress();
 
-
-      setCurrentTitle('Sẵn sàng hội thoại!');
-      setCurrentSub('Đang mở màn hội thoại…');
       const res = await initSession(trimmed, mode);
+      clearInterval(progressTimer!);
 
       if (!abortRef.current) {
+        setCurrentTitle('Sẵn sàng hội thoại!');
+        setCurrentSub('Đang mở màn hội thoại…');
         setIsTransitioning(true);
         await delay(500); // Give time for the zoom-in transition
         const ytId = extractYouTubeId(trimmed) ?? '';
@@ -175,14 +168,12 @@ export default function YoutubeInput() {
     } catch (err: any) {
       abortRef.current = true;
       setProcessing(false);
-      setStepStatuses({ transcript: 'idle', chunk: 'idle', summary: 'idle', ready: 'idle' });
-      
       setErrorMsg('Video không hợp lệ hoặc không có phụ đề (CC). Vui lòng thử video khác.');
     }
   }, [url, mode, router]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') handleSubmit();
+    if (e.key === 'Enter') handlePrepare();
   };
 
   const handlePaste = async () => {
@@ -227,6 +218,72 @@ export default function YoutubeInput() {
   }
 
   /* ── Entry Form ── */
+  if (previewVideo) {
+    return (
+      <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="flex gap-4 p-4 bg-surface border border-hairline rounded-[12px]">
+          <div className="w-[120px] shrink-0 rounded-lg overflow-hidden bg-black/5 aspect-video border border-hairline">
+            <img src={`https://img.youtube.com/vi/${previewVideo.videoId}/0.jpg`} alt="" className="w-full h-full object-cover" />
+          </div>
+          <div className="flex flex-col min-w-0 py-1">
+            <h3 className="text-[15px] font-semibold text-charcoal leading-tight line-clamp-2">{previewVideo.title}</h3>
+            <p className="text-[13px] text-steel mt-1 truncate">{previewVideo.author}</p>
+          </div>
+        </div>
+        
+        <div className="flex items-center gap-1 p-1 bg-surface rounded-[8px] border border-hairline w-fit">
+          {MODES.map((item) => {
+            const isActive = mode === item.id;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.id}
+                onClick={() => setMode(item.id)}
+                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
+              >
+                {isActive && (
+                  <motion.div
+                    layoutId="mode-pill-active"
+                    className="absolute inset-0 bg-canvas rounded-[6px] border border-hairline"
+                    transition={{ type: 'spring', bounce: 0.15, duration: 0.5 }}
+                  />
+                )}
+                <span className={`relative z-10 transition-colors duration-150 ${isActive ? 'text-charcoal' : 'text-steel'}`}>
+                  <Icon size={13} weight={isActive ? 'fill' : 'regular'} />
+                </span>
+                <span className={`relative z-10 font-medium transition-colors duration-150 ${isActive ? 'text-charcoal' : 'text-steel'}`}>
+                  {item.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[12px] text-stone leading-relaxed -mt-1">
+          {mode === 'video_chat'
+            ? 'Hội thoại tự nhiên 1.0x, AI phản hồi nhanh và bám sát video.'
+            : 'Tốc độ 0.8x, AI có gợi ý từ và giải thích — phù hợp người mới bắt đầu.'}
+        </p>
+        
+        <div className="flex gap-3 mt-1">
+          <button
+            onClick={() => setPreviewVideo(null)}
+            className="flex-1 h-11 bg-surface text-charcoal border border-hairline rounded-[8px] text-[14px] font-medium hover:bg-hairline-soft transition-colors"
+          >
+            Quay lại
+          </button>
+          <motion.button
+            whileTap={{ scale: 0.99 }}
+            onClick={handleStart}
+            className="flex-[2] flex items-center justify-center gap-2 h-11 bg-primary-600 text-white rounded-[8px] text-[14px] font-medium hover:bg-primary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-600"
+          >
+            <PlayCircle size={18} weight="fill" />
+            <span>Bắt đầu</span>
+          </motion.button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
 
@@ -326,11 +383,10 @@ export default function YoutubeInput() {
       {/* CTA Button — full width, premium weight */}
       <motion.button
         whileTap={{ scale: 0.99 }}
-        onClick={handleSubmit}
+        onClick={handlePrepare}
         className="w-full flex items-center justify-center gap-2 h-11 mt-1 bg-primary-600 text-white rounded-[8px] text-[14px] font-medium hover:bg-primary-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-primary-600"
       >
-        <PlayCircle size={18} weight="fill" />
-        <span>Trò chuyện với AI</span>
+        <span>Chuẩn bị video</span>
       </motion.button>
 
       {/* Inline reassurance */}

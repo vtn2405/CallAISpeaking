@@ -47,7 +47,7 @@ const PHASE2_FEATURES = [
 
 export default function PracticePage() {
   return (
-    <main className="p-8 lg:p-12 xl:p-16 flex flex-col gap-10 max-w-6xl mx-auto w-full min-w-0">
+    <main className="p-5 sm:p-8 lg:p-12 xl:p-16 flex flex-col gap-10 max-w-6xl mx-auto w-full min-w-0">
       <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <h1 className="text-3xl font-extrabold tracking-tight text-zinc-900">
           Luyện tập

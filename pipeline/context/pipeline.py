@@ -40,6 +40,8 @@ logger = logging.getLogger(__name__)
 # Thread pool for blocking I/O (transcript fetch is synchronous)
 _executor = ThreadPoolExecutor(max_workers=4, thread_name_prefix="ctx-pipeline")
 
+_CONTEXT_CACHE: dict[str, asyncio.Task] = {}
+
 
 class ContextPipelineError(Exception):
     """
@@ -70,18 +72,41 @@ async def build_context(
     Raises:
         ContextPipelineError: if the URL is invalid or transcript is unavailable.
     """
-    # Resolve timeout (increased default to 30 s for Gemini ingest)
-    if timeout_sec is None:
-        timeout_sec = float(os.getenv("CONTEXT_PIPELINE_TIMEOUT_SEC", "30"))
-
-    # Late import to avoid circular dependency with session_store
-    from session_store import SessionContext
-
     # ── Step 1: Parse URL → video_id ─────────────────────────────────────────
     try:
         video_id = parse_youtube_url(video_url)
     except ValueError as exc:
         raise ContextPipelineError(f"Invalid YouTube URL: {exc}") from exc
+
+    if video_id in _CONTEXT_CACHE:
+        task = _CONTEXT_CACHE[video_id]
+        if not task.done() or not task.exception():
+            try:
+                return await task
+            except Exception:
+                # Fall through to retry if cached task failed
+                pass
+
+    task = asyncio.create_task(_do_build_context(video_id, timeout_sec))
+    _CONTEXT_CACHE[video_id] = task
+
+    try:
+        return await task
+    except Exception:
+        # Evict on failure so next attempt retries
+        _CONTEXT_CACHE.pop(video_id, None)
+        raise
+
+async def _do_build_context(
+    video_id: str,
+    timeout_sec: float | None = None,
+) -> "SessionContext":  # type: ignore[name-defined]  # noqa: F821
+    """Inner logic for build_context."""
+    if timeout_sec is None:
+        timeout_sec = float(os.getenv("CONTEXT_PIPELINE_TIMEOUT_SEC", "30"))
+
+    # Late import to avoid circular dependency with session_store
+    from session_store import SessionContext
 
     logger.info("[pipeline] Starting context build for video_id=%s", video_id)
 
@@ -123,15 +148,24 @@ async def build_context(
     )
 
     # ── Step 6: Outline generation (Gemini, async, with remaining timeout) ────
-    outline: VideoOutline
-    summary_ready = False
     remaining_timeout = timeout_sec * 0.5  # ~50% of budget for Gemini
-
+    
+    # Pre-create degraded outline
+    outline = VideoOutline(summary_text="[Outline unavailable — generation timed out/failed]")
+    
+    # Run generation as a separate task
+    gen_task = asyncio.create_task(generate_outline(chunks, full_transcript))
+    
+    summary_ready = False
     try:
-        outline = await asyncio.wait_for(
-            generate_outline(chunks, full_transcript),
-            timeout=remaining_timeout,
-        )
+        generated_outline = await asyncio.wait_for(asyncio.shield(gen_task), timeout=remaining_timeout)
+        # Apply the fields onto our reference object so mutations propagate to anyone holding this outline
+        outline.parts = generated_outline.parts
+        outline.characters = generated_outline.characters
+        outline.title = generated_outline.title
+        outline.summary_text = generated_outline.summary_text
+        outline.key_events = generated_outline.key_events
+        outline.cefr_level = generated_outline.cefr_level
         summary_ready = True
         logger.info(
             "[pipeline] Outline ready: %d parts, %d characters, %d events",
@@ -140,18 +174,16 @@ async def build_context(
     except asyncio.TimeoutError:
         logger.warning(
             "[pipeline] Outline generation timed out after %.1fs — "
-            "proceeding with degraded outline",
+            "proceeding with degraded outline. Generation will continue in background.",
             remaining_timeout,
         )
-        outline = VideoOutline(summary_text="[Outline unavailable — generation timed out]")
     except Exception as exc:
         logger.warning(
             "[pipeline] Outline generation failed (%s) — proceeding with degraded outline",
             exc,
         )
-        outline = VideoOutline(summary_text="[Outline unavailable — generation error]")
 
-    return SessionContext(
+    context = SessionContext(
         video_id=video_id,
         outline=outline,
         full_transcript=full_transcript,
@@ -161,3 +193,32 @@ async def build_context(
         use_full_context=use_full_context,
         full_context_turns_used=0,
     )
+
+    # If it timed out, attach a background updater
+    if not summary_ready and not gen_task.done():
+        async def _background_update():
+            try:
+                # Wait up to 60 more seconds in background
+                generated = await asyncio.wait_for(gen_task, timeout=60.0)
+                outline.parts = generated.parts
+                outline.characters = generated.characters
+                outline.title = generated.title
+                outline.summary_text = generated.summary_text
+                outline.key_events = generated.key_events
+                outline.cefr_level = generated.cefr_level
+                context.summary_ready = True
+                logger.info("[pipeline] Background generation finished and updated cache for %s", video_id)
+            except Exception as e:
+                logger.error("[pipeline] Background generation failed: %s", e)
+                
+        asyncio.create_task(_background_update())
+
+    return context
+
+def prefetch_context(video_id: str, video_url: str) -> None:
+    """Kick off context build in the background (fire-and-forget)."""
+    if video_id not in _CONTEXT_CACHE:
+        logger.info("[pipeline] Prefetching context for %s", video_id)
+        # Create task will put it in cache and handle caching
+        # We must keep a strong reference, which _CONTEXT_CACHE does
+        asyncio.create_task(build_context(video_url))

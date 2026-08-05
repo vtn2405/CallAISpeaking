@@ -37,6 +37,7 @@ class STTProvider(ABC):
         filename: str,
         *,
         hint_language: str | None = None,
+        keyterms: list[str] | None = None,
     ) -> TranscriptionResult | None:
         """Transcribe audio bytes and return a structured result.
 
@@ -46,6 +47,8 @@ class STTProvider(ABC):
             audio_bytes: Raw audio data.
             filename: Original filename, used to hint MIME type to the provider.
             hint_language: Optional BCP-47 language tag to hint to the provider.
+            keyterms: Optional list of domain-specific terms to bias recognition
+                      (e.g. character names, place names from the video outline).
         """
         ...
 

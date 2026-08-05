@@ -48,6 +48,7 @@ Your task: Analyze the transcript thoroughly and return a JSON object that match
 {
   "title": "<A natural language, 4-10 word title. MUST be a specific topic/situation. NO technical brackets. NO marketing hype ('Amazing', 'Ultimate'). MUST read like a real lesson or speaking session.>",
   "summary_text": "<A clear, 3–5 sentence paragraph summarizing the full video topic and main message>",
+  "cefr_level": "<Your best estimate of the CEFR vocabulary/grammar difficulty level of the video's spoken language: A1, A2, B1, B2, C1, or C2. Base this on the vocabulary complexity, sentence structure, and idiom density actually used in the transcript — NOT on the topic difficulty. If you cannot determine, use an empty string.>",
   "parts": [
     { "part": 1, "title": "<part title>", "start_time": "MM:SS", "end_time": "MM:SS", "summary_text": "<what happens in this part>" }
   ],
@@ -140,8 +141,9 @@ async def generate_outline(chunks: list["Chunk"], full_transcript: str) -> Video
         try:
             outline = VideoOutline.model_validate_json(raw_text)
             logger.info(
-                "[summarizer] Gemini outline generated: %d parts, %d characters, %d events",
+                "[summarizer] Gemini outline generated: %d parts, %d characters, %d events | cefr_level=%r",
                 len(outline.parts), len(outline.characters), len(outline.key_events),
+                outline.cefr_level or "(not estimated)",
             )
             return outline
         except Exception as parse_exc:

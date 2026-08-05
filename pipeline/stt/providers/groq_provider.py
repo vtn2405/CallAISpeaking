@@ -39,6 +39,7 @@ class GroqProvider(STTProvider):
         filename: str,
         *,
         hint_language: str | None = None,
+        keyterms: list[str] | None = None,
     ) -> TranscriptionResult | None:
         if not self._api_key:
             logger.error("[groq] GROQ_API_KEY is not set")
@@ -49,19 +50,32 @@ class GroqProvider(STTProvider):
             if hint_language:
                 kwargs["language"] = hint_language
 
+            # Build Whisper prompt: base context prompt + optional keyterm list.
+            # Whisper uses the prompt field as a ~224-token prior; inject keyterms
+            # so proper nouns and target vocab are biased toward correct spelling.
+            # Handle empty outline gracefully: if keyterms is None/empty, skip.
+            base_prompt = (
+                "Tôi đang nói chuyện bằng tiếng Anh và tiếng Việt. "
+                "I am speaking in English and Vietnamese. "
+                "Preserve proper nouns, brand names, and place names exactly. "
+                "Do not translate. Transcribe exactly as spoken."
+            )
+            if keyterms:
+                # Append up to 30 keyterms (stay well within ~224-token Whisper prompt limit)
+                terms_str = ", ".join(keyterms[:30])
+                whisper_prompt = f"{base_prompt} Key terms: {terms_str}."
+            else:
+                whisper_prompt = base_prompt
+
             response = await client.audio.transcriptions.create(
                 model="whisper-large-v3",
                 file=(filename, BytesIO(audio_bytes)),
                 response_format="text",
-                prompt=(
-                    "Tôi đang nói chuyện bằng tiếng Anh và tiếng Việt. "
-                    "I am speaking in English and Vietnamese. "
-                    "Preserve proper nouns, brand names, and place names exactly. "
-                    "Do not translate. Transcribe exactly as spoken."
-                ),
+                prompt=whisper_prompt,
                 **kwargs
             )
             text = response if isinstance(response, str) else getattr(response, "text", "")
+
             text = (text or "").strip()
             if not text:
                 logger.warning("[groq] transcriptions returned empty text")

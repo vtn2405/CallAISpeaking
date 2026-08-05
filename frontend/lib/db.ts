@@ -6,7 +6,7 @@
  *
  * Schema:
  *   DB name    : ChatboxAIDB
- *   Version    : 1
+ *   Version    : 2
  *
  *   Object store: sessions
  *     keyPath  : id (UUID string)
@@ -18,16 +18,21 @@
  *     Indexes  : by_session_id (session_id)
  *                by_session_sequence ([session_id, sequence])  — for deterministic ordering
  *
+ *   Object store: lookups  [added v2]
+ *     keyPath  : id (UUID string)
+ *     Indexes  : by_session_id (session_id)  — fetch all lookups for a session
+ *                by_session_term ([session_id, term])  — for dedup check
+ *
  * Migration notes:
  *   - Bump DB_VERSION and add a new upgrade() branch when schema changes.
  *   - Never mutate an existing upgrade() branch — always add a new version block.
  */
 
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
-import type { ArchivedSession, ArchivedMessage } from '@/types/history';
+import type { ArchivedSession, ArchivedMessage, ArchivedLookupEvent } from '@/types/history';
 
 const DB_NAME = 'ChatboxAIDB';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 interface ChatboxAISchema extends DBSchema {
   sessions: {
@@ -44,6 +49,14 @@ interface ChatboxAISchema extends DBSchema {
     indexes: {
       by_session_id: string;
       by_session_sequence: [string, number];
+    };
+  };
+  lookups: {
+    key: string;
+    value: ArchivedLookupEvent;
+    indexes: {
+      by_session_id: string;
+      by_session_term: [string, string];
     };
   };
 }
@@ -72,7 +85,14 @@ export function getDb(): Promise<IDBPDatabase<ChatboxAISchema>> | null {
           messageStore.createIndex('by_session_id', 'session_id');
           messageStore.createIndex('by_session_sequence', ['session_id', 'sequence']);
         }
-        // Future: add new version blocks here. Do not touch the block above.
+        // Version 2 — add lookups store for word/phrase lookup event log
+        if (oldVersion < 2) {
+          const lookupStore = db.createObjectStore('lookups', { keyPath: 'id' });
+          lookupStore.createIndex('by_session_id', 'session_id');
+          // Compound index for dedup check and vocabulary panel grouping
+          lookupStore.createIndex('by_session_term', ['session_id', 'term']);
+        }
+        // Future: add new version blocks here. Do not touch the blocks above.
       },
       blocked() {
         // Another tab has the DB open on an old version.

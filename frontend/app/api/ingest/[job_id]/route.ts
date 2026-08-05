@@ -11,7 +11,11 @@ export async function GET(
     // Frontend only talks to Pipeline (Railway). Worker is invisible to Frontend.
     const pipelineUrl = (process.env.PIPECAT_SHIM_URL || 'http://localhost:8000').replace(/\/$/, '');
 
-    const response = await fetch(`${pipelineUrl}/api/ingest/${jobId}`);
+    const response = await fetch(`${pipelineUrl}/api/ingest/${jobId}`, {
+      headers: {
+        'Authorization': `Bearer ${process.env.PIPELINE_SECRET || 'dev-pipeline-secret'}`,
+      },
+    });
 
     if (response.status === 404) {
       return NextResponse.json({ error: 'Job not found' }, { status: 404 });

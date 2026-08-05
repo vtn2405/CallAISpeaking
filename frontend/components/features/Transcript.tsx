@@ -1,7 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { SpeakerHigh, StopCircle } from '@phosphor-icons/react';
 import { Message } from '@/types/call';
+import { useAzureTTS } from '@/hooks/useAzureTTS';
 import styles from '@/styles/Transcript.module.css';
 
 interface Props {
@@ -18,6 +20,13 @@ interface Props {
 export default function Transcript({ messages, isTyping, onClear, prompts, onPrompt, liveSubtitle }: Props) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+
+  const { speakText, stop, isSpeaking } = useAzureTTS({
+    onEnd: (_text, turnId) => {
+      setPlayingId((prev) => (prev === turnId ? null : prev));
+    },
+  });
 
   // Auto-scroll to bottom when messages or live subtitle change
   useEffect(() => {
@@ -25,6 +34,16 @@ export default function Transcript({ messages, isTyping, onClear, prompts, onPro
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [messages, isTyping, liveSubtitle]);
+
+  const handleReplay = (msg: Message) => {
+    if (isSpeaking && playingId === msg.id) {
+      stop();
+      setPlayingId(null);
+    } else {
+      speakText(msg.text, 1.0, msg.id);
+      setPlayingId(msg.id);
+    }
+  };
 
 
   return (
@@ -58,7 +77,29 @@ export default function Transcript({ messages, isTyping, onClear, prompts, onPro
               </div>
               <div className={`${styles.msgBubble} ${msg.sender === 'ai' ? styles.aiBubble : styles.userBubble}`}>
                 <p>{msg.text}</p>
-                <span className={styles.msgTime}>{msg.time}</span>
+                <div className={styles.msgFooter}>
+                  <span className={styles.msgTime}>{msg.time}</span>
+                  {msg.sender === 'ai' && (
+                    <button
+                      type="button"
+                      className={`${styles.replayBtn} ${isSpeaking && playingId === msg.id ? styles.playing : ''}`}
+                      onClick={() => handleReplay(msg)}
+                      title={isSpeaking && playingId === msg.id ? 'Dừng phát' : 'Nghe lại'}
+                    >
+                      {isSpeaking && playingId === msg.id ? (
+                        <>
+                          <StopCircle size={15} weight="fill" />
+                          <span>Đang phát</span>
+                        </>
+                      ) : (
+                        <>
+                          <SpeakerHigh size={15} weight="bold" />
+                          <span>Nghe lại</span>
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           ))}

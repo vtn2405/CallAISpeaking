@@ -1,30 +1,4 @@
-.callMain {
-  margin-left: var(--sidebar-width);
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  overflow: hidden;
-  background: var(--bg);
-}
-
-.callLayout {
-  flex: 1;
-  display: grid;
-  grid-template-columns: 420px 1fr;
-  overflow: hidden;
-}
-
-.callCenterCol {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 28px 28px 24px;
-  gap: 20px;
-  background: var(--bg);
-  border-right: 1px solid var(--border);
-  overflow-y: auto;
-}
+/* Unused layout classes removed */
 
 .videoContextCard {
   display: flex;
@@ -63,11 +37,4 @@
 }
 .videoYtLink:hover { background: #fff0f0; }
 
-@media (max-width: 900px) {
-  .callLayout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
-  .callCenterCol { border-right: none; border-bottom: 1px solid var(--border); padding: 20px; }
-}
-
-@media (max-width: 680px) {
-  .callMain { margin-left: 0; }
-}
+/* No media queries needed for VideoContextCard */

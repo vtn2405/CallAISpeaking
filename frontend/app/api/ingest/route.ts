@@ -9,7 +9,10 @@ export async function POST(request: Request) {
 
     const response = await fetch(`${pipelineUrl}/api/ingest`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.PIPELINE_SECRET || 'dev-pipeline-secret'}`,
+      },
       body: JSON.stringify(body),
     });
 

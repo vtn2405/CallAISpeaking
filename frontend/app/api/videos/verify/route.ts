@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Video âm nhạc (Music Video) không được hỗ trợ' }, { status: 400 });
     }
 
-    return NextResponse.json({ ok: true, videoId });
+    return NextResponse.json({ ok: true, videoId, title, author });
   } catch (err) {
     console.error('[videos/verify] Error:', err);
     return NextResponse.json({ error: 'Lỗi kết nối khi xác thực video' }, { status: 500 });

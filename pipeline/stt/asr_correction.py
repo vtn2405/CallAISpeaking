@@ -15,6 +15,7 @@ Both functions return None on guard failure so callers always get a safe fallbac
 from __future__ import annotations
 
 import difflib
+import json
 import logging
 
 logger = logging.getLogger(__name__)
@@ -207,4 +208,138 @@ async def call_groq_vi_asr_correction(client, text: str) -> str | None:
         return corrected
     except Exception as exc:
         logger.warning("[stt] Groq VI ASR correction failed: %s", exc)
+        return None
+
+
+# ── Merged VI-correction + Translation (1 hop instead of 2) ──────────────────
+# Only active when BOTH STT_ENABLE_MERGED_VI_CORRECTION and
+# STT_ENABLE_VI_ASR_CORRECTION are true. Falls back to the caller's 2-hop logic
+# when the output fails guards or JSON cannot be parsed.
+#
+# Model: llama-3.1-8b-instant — single short sentence, don't need 70b quality.
+# Benchmark and upgrade to llama-3.3-70b if quality drops on real audio.
+_MERGED_VI_MODEL = "llama-3.1-8b-instant"
+
+_MERGED_VI_CORRECT_TRANSLATE_PROMPT = (
+    "Ban la chuyen gia ket hop (1) sua loi ASR tieng Viet va (2) dich sang tieng Anh "
+    "cho mot ung dung luyen tieng Anh viet-anh song ngu.\n\n"
+    "Nhiem vu:\n"
+    "1. SUA LOI ASR (corrected_vi): Chi sua cac tu bi nghe sai boi may nhan dang giong noi. "
+    "GIU NGUYEN: ngu phap, thu tu tu, cau truc, y dinh nguoi noi, cac tu tieng Anh chen vao (code-switch). "
+    "TUYET DOI KHONG Viet-hoa ten tieng Anh (Jenny != 'day nit'). "
+    "Neu khong co loi nao can sua, tra lai nguyen van.\n"
+    "2. DICH (translated_en): Dich 'corrected_vi' sang tieng Anh. "
+    "Dich sat nghia, giu ten rieng nguyen ban, KHONG bien tap hay lam dep them.\n\n"
+    "Chi xuat JSON dung dinh dang sau, khong giai thich gi them:\n"
+    "{\"corrected_vi\": \"<ban tieng Viet da sua>\", \"translated_en\": \"<ban dich tieng Anh>\"}"
+)
+
+
+async def call_groq_vi_correct_and_translate(
+    client,
+    text: str,
+) -> tuple[str, str] | None:
+    """Merge VI ASR correction + translation into a single LLM call.
+
+    Returns (corrected_vi, translated_en) on success, or None if:
+      - JSON parse fails
+      - corrected_vi guard rejects (too many words changed)
+      - translated_en length ratio is implausible
+      - Any exception is raised
+
+    Caller must fall back to the 2-hop path (call_groq_vi_asr_correction +
+    call_llm_translation) when this returns None.
+
+    Precedence: only call this when BOTH STT_ENABLE_MERGED_VI_CORRECTION and
+    STT_ENABLE_VI_ASR_CORRECTION are true (enforced by router.py).
+    """
+    if not text.strip():
+        return None
+    try:
+        response = await client.chat.completions.create(
+            model=_MERGED_VI_MODEL,
+            temperature=0,
+            max_completion_tokens=512,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": _MERGED_VI_CORRECT_TRANSLATE_PROMPT},
+                {"role": "user",   "content": text},
+            ],
+        )
+        raw = (response.choices[0].message.content or "").strip()
+        try:
+            data = json.loads(raw)
+        except Exception:
+            logger.warning(
+                "[stt] merged_vi: JSON parse failed | raw=%r", raw[:120]
+            )
+            return None
+
+        corrected_vi = (data.get("corrected_vi") or "").strip()
+        translated_en = (data.get("translated_en") or "").strip()
+
+        if not corrected_vi or not translated_en:
+            logger.warning(
+                "[stt] merged_vi: missing key in JSON | corrected_vi=%r translated_en=%r",
+                corrected_vi[:60], translated_en[:60],
+            )
+            return None
+
+        # ── Guard 1: corrected_vi must not be a full rewrite ─────────────────
+        orig_tokens = text.lower().split()
+        corr_tokens = corrected_vi.lower().split()
+        changed_words = 0
+        if orig_tokens:
+            matcher = difflib.SequenceMatcher(None, orig_tokens, corr_tokens)
+            changed_words = sum(
+                max(i2 - i1, j2 - j1)
+                for tag, i1, i2, j1, j2 in matcher.get_opcodes()
+                if tag != "equal"
+            )
+            max_allowed = max(
+                _ASR_CORRECTION_VI_MAX_CHANGED_WORDS_ABS_FLOOR,
+                round(len(orig_tokens) * _ASR_CORRECTION_VI_MAX_CHANGED_WORDS_RATIO),
+            )
+            word_count_delta = abs(len(corr_tokens) - len(orig_tokens))
+
+            if changed_words >= len(orig_tokens):
+                logger.warning(
+                    "[stt] merged_vi rejected: full_rewrite | changed=%d/%d | %r -> %r",
+                    changed_words, len(orig_tokens), text, corrected_vi,
+                )
+                return None
+            if changed_words > max_allowed:
+                logger.warning(
+                    "[stt] merged_vi rejected: too_many_changed | changed=%d max=%d | %r -> %r",
+                    changed_words, max_allowed, text, corrected_vi,
+                )
+                return None
+            if word_count_delta > _ASR_CORRECTION_VI_MAX_WORD_COUNT_DELTA:
+                logger.warning(
+                    "[stt] merged_vi rejected: word_count_delta=%d | %r -> %r",
+                    word_count_delta, text, corrected_vi,
+                )
+                return None
+
+        # ── Guard 2: translated_en length ratio must be plausible ─────────────
+        ratio = len(translated_en) / max(len(corrected_vi), 1)
+        if ratio < 0.1 or ratio > 3.0:
+            logger.warning(
+                "[stt] merged_vi rejected: translation length ratio=%.2f | "
+                "corrected_vi=%r translated_en=%r",
+                ratio, corrected_vi[:60], translated_en[:60],
+            )
+            return None
+
+        logger.info(
+            "[stt] merged_vi accepted | changed=%d/%d | corrected_vi=%r | translated_en=%r",
+            changed_words if orig_tokens else 0,
+            len(orig_tokens) if orig_tokens else 0,
+            corrected_vi[:60],
+            translated_en[:60],
+        )
+        return corrected_vi, translated_en
+
+    except Exception as exc:
+        logger.warning("[stt] merged_vi call failed: %s", exc)
         return None
