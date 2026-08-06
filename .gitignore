@@ -17,7 +17,7 @@ node_modules/
 
 # Excluded folders
 taste-skill/
-dashboard/
+
 *skill*/
 skills/
 
