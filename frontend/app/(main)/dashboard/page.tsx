@@ -2,8 +2,7 @@ import type { Metadata } from 'next';
 import Toast from '@/components/ui/Toast';
 import YoutubeInput from '@/components/features/YoutubeInput';
 import LockedFeatureCards from '@/components/features/LockedFeatureCards';
-import RecentSessions from '@/components/features/RecentSessions';
-import DashboardStats from '@/components/features/DashboardStats';
+import DashboardProgressWrapper from '@/components/dashboard/DashboardProgressWrapper';
 
 export const metadata: Metadata = {
   title: 'Trang chủ',
@@ -24,9 +23,6 @@ export default function DashboardPage() {
         </p>
       </header>
       
-      <div className="mb-8">
-        <DashboardStats />
-      </div>
 
       {/* ── PRIMARY: Conversation Entry — sits directly on page, no outer card ── */}
       <section aria-labelledby="entry-title" className="mb-5">
@@ -37,9 +33,9 @@ export default function DashboardPage() {
       {/* ── Divider ── */}
       <div className="border-t border-hairline my-8" />
 
-      {/* ── TERTIARY: Recent sessions ── */}
+      {/* ── TERTIARY: Recent sessions & Progress ── */}
       <div className="mb-10">
-        <RecentSessions />
+        <DashboardProgressWrapper />
       </div>
 
       {/* ── LOW PRIORITY: Phase 2 locked features ── */}
