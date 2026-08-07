@@ -3,72 +3,58 @@
 import { useCallback, useEffect, useState } from 'react';
 import { computeProgressStats } from '@/lib/progress/computeProgressStats';
 import type { PracticeSession, ProgressStats } from '@/lib/progress/types';
+import { getAllSessions } from '@/lib/historyRepository';
+import { getUserIdentity } from '@/lib/identity';
+import { getDb } from '@/lib/db';
 
-// ⚠️ ĐỔI 3 hằng số này cho khớp IndexedDB hiện có của bạn
-const DB_NAME = 'ai-speaking-coach';
-const SESSION_STORE = 'sessions';
-const VOCAB_STORE = 'vocabulary';
-
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(DB_NAME);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-}
-
-function readAll<T>(db: IDBDatabase, store: string): Promise<T[]> {
-  return new Promise((resolve) => {
-    if (!db.objectStoreNames.contains(store)) return resolve([]);
-    const tx = db.transaction(store, 'readonly');
-    const req = tx.objectStore(store).getAll();
-    req.onsuccess = () => resolve((req.result ?? []) as T[]);
-    req.onerror = () => resolve([]);
-  });
-}
-
-/**
- * Đọc IndexedDB -> tính stats.
- *
- * Nếu project đã có sẵn lớp truy cập DB (vd `db.sessions.toArray()` của Dexie),
- * hãy bỏ phần openDB/readAll và gọi trực tiếp hàm của bạn — chỉ cần trả về
- * mảng có `startedAt` (ms) và `durationSec`.
- */
 export function useProgressStats() {
   const [stats, setStats] = useState<ProgressStats | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const db = await openDB();
+      const guestId = await getUserIdentity();
+      if (!guestId) {
+        setStats(null);
+        setLoading(false);
+        return;
+      }
 
-      // Map dữ liệu thật -> PracticeSession.
-      // ⚠️ Đổi tên field cho khớp schema của bạn (vd endedAt - startedAt để ra duration).
-      const rawSessions = await readAll<any>(db, SESSION_STORE);
+      const rawSessions = await getAllSessions(guestId);
+
       const sessions: PracticeSession[] = rawSessions
         .map((r) => ({
-          id: String(r.id ?? r.sessionId ?? crypto.randomUUID()),
-          startedAt: Number(r.startedAt ?? r.createdAt ?? r.timestamp ?? 0),
+          id: r.id,
+          startedAt: new Date(r.created_at).getTime(),
           durationSec: Number(
-            r.durationSec ??
-              (r.endedAt && r.startedAt ? Math.round((r.endedAt - r.startedAt) / 1000) : 0),
+            r.duration_seconds ??
+              Math.max(0, Math.round((new Date(r.updated_at).getTime() - new Date(r.created_at).getTime()) / 1000)),
           ),
-          videoTitle: r.videoTitle ?? r.title,
-          videoId: r.videoId,
-          thumbnailUrl: r.thumbnailUrl,
+          videoTitle: r.title,
+          videoId: r.video_id,
+          thumbnailUrl: r.video_id ? `https://img.youtube.com/vi/${r.video_id}/0.jpg` : undefined,
         }))
         .filter((s) => s.startedAt > 0);
 
-      const vocab = await readAll<any>(db, VOCAB_STORE);
+      // Get vocabulary count by counting lookups for each session
+      let vocabCount = 0;
+      const db = await getDb();
+      if (db) {
+        const tx = db.transaction('lookups', 'readonly');
+        const index = tx.store.index('by_session_id');
+        for (const s of sessions) {
+          const keys = await index.getAllKeys(s.id);
+          vocabCount += keys.length;
+        }
+      }
 
       setStats(
-        computeProgressStats(sessions, vocab.length, {
-          // Bật true nếu muốn: hôm nay chưa luyện nhưng hôm qua có -> vẫn giữ chuỗi
-          // (tránh 0h sáng chuỗi tụt về 0). Mặc định false = giống hành vi hiện tại.
+        computeProgressStats(sessions, vocabCount, {
           graceToday: false,
         }),
       );
-    } catch {
+    } catch (err) {
+      console.error('Failed to load progress stats:', err);
       setStats(null);
     } finally {
       setLoading(false);
@@ -79,6 +65,5 @@ export function useProgressStats() {
     void load();
   }, [load]);
 
-  /** gọi sau khi kết thúc một buổi luyện để cập nhật ngay */
   return { stats, loading, refresh: load };
 }
