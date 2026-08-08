@@ -229,7 +229,14 @@ async def normalize_speech(audio: UploadFile = File(...), session_id: str = "") 
             logger.debug("[stt] keyterm extraction failed (non-fatal): %s", _kt_exc)
 
     # Try Deepgram parallel first
-    result, p_name, reason = await parallel_transcribe(deepgram, audio_bytes, filename, groq_client, keyterms=keyterms)
+    try:
+        result, p_name, reason = await parallel_transcribe(deepgram, audio_bytes, filename, groq_client, keyterms=keyterms)
+    except Exception as exc:
+        logger.error("[stt] Deepgram parallel_transcribe raised exception: %s", exc)
+        result = None
+        p_name = None
+        reason = str(exc)
+
     if result and not result.is_empty():
         verbatim_text = result.text
         provider_used = "deepgram"
@@ -239,7 +246,13 @@ async def normalize_speech(audio: UploadFile = File(...), session_id: str = "") 
     else:
         fallback_reason = "deepgram_failed"
         logger.info("[stt] Deepgram failed, falling back to Groq parallel transcription")
-        result, p_name, reason = await parallel_transcribe(groq, audio_bytes, filename, groq_client, keyterms=keyterms)
+        try:
+            result, p_name, reason = await parallel_transcribe(groq, audio_bytes, filename, groq_client, keyterms=keyterms)
+        except Exception as exc:
+            logger.error("[stt] Groq parallel_transcribe raised exception: %s", exc)
+            result = None
+            p_name = None
+            reason = str(exc)
         if result and not result.is_empty():
             verbatim_text = result.text
             provider_used = "groq"

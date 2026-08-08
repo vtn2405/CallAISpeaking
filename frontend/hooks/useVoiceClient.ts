@@ -191,7 +191,14 @@ export function useVoiceClient({
     micWarmingRef.current = true;
     console.log('[gstack] mic warm-up: requesting getUserMedia...');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          autoGainControl: true,
+        },
+        video: false,
+      });
       streamRef.current = stream;
       micReadyRef.current = true;
       console.log('[gstack] mic warm-up: stream ready ✓');
