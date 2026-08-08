@@ -65,7 +65,7 @@ export function DangerZone() {
       }
       
       await supabase.auth.signOut();
-      window.location.href = '/dashboard';
+      window.location.href = '/login';
     } catch (err) {
       console.error('Error deleting account:', err);
       showToast('Lỗi khi xoá tài khoản', { type: 'error' });

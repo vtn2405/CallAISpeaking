@@ -203,7 +203,7 @@ export default function MobileDrawer({ isOpen, onClose, setShowLockModal }: Mobi
                       onClick={async () => {
                         const supabase = createClient();
                         await supabase.auth.signOut();
-                        window.location.href = '/';
+                        window.location.href = '/login';
                       }}
                       className="text-[11px] text-steel hover:text-charcoal text-left mt-0.5"
                     >

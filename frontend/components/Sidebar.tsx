@@ -83,7 +83,7 @@ export default function Sidebar({ setShowLockModal }: { setShowLockModal: (show:
           onClick={async () => {
             const supabase = createClient();
             await supabase.auth.signOut();
-            window.location.href = '/dashboard';
+            window.location.href = '/login';
           }}
         >
           {content}
