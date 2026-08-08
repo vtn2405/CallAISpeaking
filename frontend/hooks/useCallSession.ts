@@ -132,6 +132,10 @@ export function useCallSession({ videoUrl, mode = 'video_chat', initialSessionId
       promise = Promise.resolve({
         sessionId: initialSessionId,
         status: 'processing',
+        sessionToken: (() => {
+          if (typeof window === 'undefined') return undefined;
+          return sessionStorage.getItem(`token-${initialSessionId}`) || undefined;
+        })(),
         metadata: (() => {
           if (typeof window === 'undefined') return undefined;
           try {

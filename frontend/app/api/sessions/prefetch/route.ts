@@ -13,7 +13,10 @@ export async function POST(req: NextRequest) {
     const backendUrl = process.env.PIPELINE_URL || 'http://127.0.0.1:8000';
     const res = await fetch(`${backendUrl}/api/sessions/prefetch`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.PIPELINE_SECRET || ''}`
+      },
       body: JSON.stringify({ videoUrl }),
     });
 

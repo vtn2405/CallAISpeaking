@@ -161,6 +161,9 @@ export default function YoutubeInput() {
         // Save metadata temporarily in sessionStorage
         if (typeof window !== 'undefined' && res.metadata) {
           sessionStorage.setItem(`meta-${res.sessionId}`, JSON.stringify(res.metadata));
+          if (res.sessionToken) {
+            sessionStorage.setItem(`token-${res.sessionId}`, res.sessionToken);
+          }
         }
 
         router.push(`/call?url=${encodeURIComponent(trimmed)}&vid=${ytId}&mode=${mode}&sessionId=${res.sessionId}`);
