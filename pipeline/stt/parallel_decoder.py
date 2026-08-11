@@ -544,7 +544,7 @@ async def _first_completed_transcribe(
                                     cname = ct.get_name()
                                     try:
                                         results[cname] = ct.result()
-                                    except Exception:
+                                    except (Exception, asyncio.CancelledError):
                                         results[cname] = None
                             pending = set()  # exit loop
                             break
