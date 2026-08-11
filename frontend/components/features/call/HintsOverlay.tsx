@@ -20,14 +20,12 @@ export default function HintsOverlay({ hintsPanel, hintsLoading, hintsView, onCl
   const dragControls = useDragControls();
   const controls = useAnimation();
   
-  // Height states for mobile: 'peek' (55dvh) or 'expanded' (85dvh)
-  const [sheetState, setSheetState] = useState<'peek' | 'expanded'>('peek');
+  // Height states for mobile: simple 'visible' state with max-height
   const sheetRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
-      setSheetState('peek');
-      controls.start('peek');
+      controls.start('visible');
     }
   }, [isOpen, controls]);
 
@@ -145,11 +143,10 @@ export default function HintsOverlay({ hintsPanel, hintsLoading, hintsView, onCl
   }
 
   // Mobile Bottom Sheet
-  // Container is h-[85dvh] and fixed bottom-0.
+  // Container is max-h-[85dvh] and fixed bottom-0.
   const variants = {
     hidden: { y: '100%' },
-    peek: { y: '30dvh' }, // translated down 30dvh, so 85-30 = 55dvh is visible
-    expanded: { y: '0dvh' } // 0 translation, full 85dvh is visible
+    visible: { y: '0%' }
   };
 
   return (
@@ -165,11 +162,11 @@ export default function HintsOverlay({ hintsPanel, hintsLoading, hintsView, onCl
       <motion.div
         id="hints-overlay"
         ref={sheetRef}
-        className="fixed bottom-0 left-0 right-0 h-[85dvh] bg-black/70 backdrop-blur-3xl border-t border-white/10 z-[40] shadow-2xl flex flex-col min-h-0 pointer-events-auto rounded-t-3xl"
+        className="fixed bottom-0 left-0 right-0 max-h-[85dvh] bg-black/70 backdrop-blur-3xl border-t border-white/10 z-[40] shadow-2xl flex flex-col min-h-0 pointer-events-auto rounded-t-3xl"
         role="dialog"
         aria-label="Gợi ý hội thoại"
         aria-modal="false"
-        initial={shouldReduceMotion ? "peek" : "hidden"}
+        initial={shouldReduceMotion ? "visible" : "hidden"}
         animate={controls}
         exit="hidden"
         variants={variants}
@@ -177,28 +174,16 @@ export default function HintsOverlay({ hintsPanel, hintsLoading, hintsView, onCl
         drag="y"
         dragControls={dragControls}
         dragListener={false} // Only drag on handle
-        dragConstraints={{ top: 0 }} // Prevent dragging higher than expanded state natively
+        dragConstraints={{ top: 0 }} // Prevent dragging higher than visible state natively
         dragElastic={0.1}
         onDragEnd={(e, info) => {
           const velocity = info.velocity.y;
           const offset = info.offset.y;
           
-          if (sheetState === 'expanded') {
-            if (velocity > 400 || offset > 100) {
-              setSheetState('peek');
-              controls.start('peek');
-            } else {
-              controls.start('expanded');
-            }
+          if (velocity > 400 || offset > 80) {
+            onClose();
           } else {
-            if (velocity > 400 || offset > 80) {
-              onClose();
-            } else if (velocity < -400 || offset < -80) {
-              setSheetState('expanded');
-              controls.start('expanded');
-            } else {
-              controls.start('peek');
-            }
+            controls.start('visible');
           }
         }}
       >
