@@ -191,26 +191,24 @@ export default function MobileDrawer({ isOpen, onClose, setShowLockModal }: Mobi
             </nav>
 
             {/* User section */}
-            <div className="flex items-center justify-start p-4 gap-3 border-t border-hairline mt-auto group transition-colors hover:bg-surface">
+            <div className="flex items-center justify-start p-4 gap-3 border-t border-hairline mt-auto group transition-colors">
               {user ? (
-                <>
-                  <div className="w-8 h-8 rounded-full bg-ink text-white flex items-center justify-center font-medium text-sm shrink-0">
-                    {user.email?.[0].toUpperCase() || 'U'}
+                <Link href="/settings" onClick={onClose} className="flex items-center w-full cursor-pointer hover:bg-surface rounded p-1 -m-1 transition-colors">
+                  <div 
+                    className="w-8 h-8 rounded-full text-white flex items-center justify-center font-medium text-sm shrink-0"
+                    style={{ backgroundColor: user.user_metadata?.avatar_color || '#1A1A1A' }}
+                  >
+                    {user.user_metadata?.displayName?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || 'U'}
                   </div>
-                  <div className="flex-1 flex-col leading-tight whitespace-nowrap overflow-hidden transition-all duration-300 flex">
-                    <span className="text-[13px] font-medium text-ink truncate" title={user.email}>{user.email}</span>
-                    <button 
-                      onClick={async () => {
-                        const supabase = createClient();
-                        await supabase.auth.signOut();
-                        window.location.href = '/login';
-                      }}
-                      className="text-[11px] text-steel hover:text-charcoal text-left mt-0.5"
-                    >
-                      Đăng xuất
-                    </button>
+                  <div className="flex-1 flex-col leading-tight whitespace-nowrap overflow-hidden transition-all duration-300 flex ml-3">
+                    <span className="text-[13px] font-medium text-ink truncate" title={user.user_metadata?.displayName || user.email}>
+                      {user.user_metadata?.displayName || user.email}
+                    </span>
+                    <span className="text-[11px] text-steel hover:text-charcoal text-left mt-0.5">
+                      Cài đặt
+                    </span>
                   </div>
-                </>
+                </Link>
               ) : (
                 <Link href="/login" onClick={onClose} className="flex items-center w-full">
                   <div className="w-8 h-8 rounded-full bg-surface border border-hairline text-stone flex items-center justify-center font-medium text-sm shrink-0">
