@@ -132,8 +132,13 @@ async def normalize_speech(audio: UploadFile = File(...), session_id: str = "") 
 
     if AsyncGroq is None:
         logger.error("[stt] groq package is missing, cannot initialize arbiter")
-        raise HTTPException(status_code=500, detail="STT internal error (groq pkg)")
-    groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY", ""))
+        groq_client = None
+    else:
+        try:
+            groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY", ""))
+        except Exception as exc:
+            logger.error("[stt] Failed to initialize AsyncGroq: %s", exc)
+            groq_client = None
 
     # ── Extract keyterms from session outline (Phase 1B biasing) ───────────────────────
     # session_id is optional (sent by frontend in FormData). If missing or the
