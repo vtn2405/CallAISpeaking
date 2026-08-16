@@ -171,12 +171,18 @@ export function useAzureTTS({
     }
   }, []);
 
-  const speakText = useCallback((text: string, rate: number = 1.0, turnId?: string) => {
+  const speakText = useCallback(async (text: string, rate: number = 1.0, turnId?: string) => {
     if (!text.trim()) return;
     if (!configRef.current || !sdkRef.current) {
       console.warn('[useAzureTTS] speakText called but config not ready');
       onEndRef.current?.(text, turnId);
       return;
+    }
+
+    // Refresh token if needed (fetchSpeechToken handles 5-minute caching)
+    const tokenData = await fetchSpeechToken(resolvedBackend);
+    if (tokenData && configRef.current) {
+      configRef.current.authorizationToken = tokenData.token;
     }
 
     // Stop any ongoing playback
