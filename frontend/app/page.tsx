@@ -819,7 +819,7 @@ export default function LandingPage() {
     </div>
     <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-slate-100 pt-6 text-sm text-slatey sm:flex-row">
       <p>© 2026 AI Speaking Coach.</p>
-      <p>Vibed & coded with 💙 by vtn2405 for Vietnamese learners</p>
+      <p>Design by vtn2405 for Vietnamese learners</p>
     </div>
   </div>
 </footer>
